@@ -1,0 +1,20 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Frontend.Models
+{
+    public class LeaveReviewViewModel
+    {
+        [Required]
+        public int ProductId { get; set; }
+
+        [Required(ErrorMessage = "Please select a rating.")]
+        [Range(1, 5, ErrorMessage = "Please select a rating between 1 and 5.")]
+        public int Rating { get; set; }
+
+        [MaxLength(500)]
+        public string? Comment { get; set; }
+
+        public string? ProductTitle { get; set; }
+        public string? ProductImage { get; set; }
+    }
+}

@@ -1,0 +1,11 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "server =(local); database = CloneEbayDB;uid=sa;pwd=123abc@A;TrustServerCertificate=True"
+  },
+  "Jwt": {
+    "Key": "ThisIsASecretKeyForJwtDontShareOkayRight",
+    "Issuer": "yourapp",
+    "Audience": "yourapp_users",
+    "ExpireMinutes": 60
+  }
+}

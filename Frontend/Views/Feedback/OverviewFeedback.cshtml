@@ -1,0 +1,419 @@
+﻿@model User
+
+<!DOCTYPE html>
+<html lang="vi">
+ <!-- ĐÃ BỎ: data-bs-theme="dark" -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seller Feedback - eBay Clone</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons (cho biểu tượng trái tim) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- CSS tùy chỉnh -->
+    <style>
+        body {
+            background-color: #f7f7f7; /* THAY ĐỔI: Màu nền xám nhạt (light mode) */
+        }
+
+        /* ----- Thông tin người bán (Header) ----- */
+        .seller-header {
+            border-bottom: 1px solid #e1e1e1; /* THAY ĐỔI: Viền sáng */
+            padding-bottom: 1rem;
+        }
+
+        .seller-logo {
+            width: 60px;
+            height: 60px;
+            border: 1px solid #e1e1e1; /* THAY ĐỔI: Viền sáng */
+            border-radius: 8px;
+        }
+
+        .feedback-percentage {
+            font-size: 0.9rem;
+            color: #555; /* THAY ĐỔI: Màu chữ tối */
+        }
+
+        .heart-icon {
+            font-size: 1.5rem;
+            color: #555; /* THAY ĐỔI: Màu chữ tối */
+            cursor: pointer;
+        }
+
+            .heart-icon:hover {
+                color: #000; /* THAY ĐỔI: Màu hover */
+            }
+
+        /* ----- Tabs điều hướng (Shop, About, Feedback) ----- */
+        .nav-tabs .nav-link {
+            color: #555; /* THAY ĐỔI: Màu chữ tối */
+            border: none;
+            padding-left: 0;
+            padding-right: 0;
+            margin-right: 1.5rem;
+            font-size: 1rem;
+        }
+
+            .nav-tabs .nav-link.active {
+                color: #111; /* THAY ĐỔI: Màu chữ tối active */
+                font-weight: bold;
+                background-color: transparent;
+                border-bottom: 3px solid #5294ff; /* Viền xanh của eBay */
+            }
+
+        .nav-tabs {
+            border-bottom: 1px solid #e1e1e1; /* THAY ĐỔI: Viền sáng */
+        }
+
+        /* ----- Các khối nội dung ----- */
+        .content-section {
+            margin-top: 2rem;
+        }
+
+        .section-subtitle {
+            font-size: 0.9rem;
+            color: #555; /* THAY ĐỔI: Màu chữ tối */
+        }
+
+        /* Xếp hạng chung (Positive, Neutral, Negative) */
+        .ratings-summary h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #5294ff; /* Màu xanh nổi bật cho số */
+        }
+
+        .ratings-summary p {
+            font-size: 0.9rem;
+            color: #555; /* THAY ĐỔI: Màu chữ tối */
+            margin-bottom: 0;
+        }
+
+        /* Xếp hạng chi tiết (Thanh progress) */
+        .detailed-rating-item {
+            margin-bottom: 1rem;
+        }
+
+        .rating-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+            .rating-label span {
+                font-size: 0.9rem;
+            }
+
+            .rating-label .score {
+                font-weight: 600;
+                font-size: 1rem;
+            }
+
+        /* Tùy chỉnh thanh progress */
+        .progress {
+            height: 8px; /* Làm thanh mỏng hơn */
+            background-color: #e9ecef; /* THAY ĐỔI: Màu nền sáng cho progress */
+        }
+
+        .progress-bar {
+            background-color: #777; /* Giữ nguyên màu thanh cho dễ thấy */
+        }
+
+
+        .feedback-tabs .nav-link {
+            font-size: 0.9rem;
+            color: #555;
+            border: 1px solid transparent;
+            border-bottom: 3px solid transparent;
+        }
+
+            .feedback-tabs .nav-link.active {
+                color: #111;
+                font-weight: 600;
+                border: 1px solid #e1e1e1;
+                border-bottom: 3px solid #fff; /* Che đi viền dưới của .card-header */
+                background-color: #fff;
+                border-top-left-radius: 0.25rem;
+                border-top-right-radius: 0.25rem;
+                margin-bottom: -1px; /* Kéo lên trên viền */
+            }
+
+        .feedback-list-container {
+            border: 1px solid #e1e1e1;
+            background-color: #fff;
+            border-top: none; /* Tabs sẽ xử lý viền trên */
+            border-bottom-left-radius: 0.25rem;
+            border-bottom-right-radius: 0.25rem;
+        }
+
+        .feedback-item {
+            padding: 1rem;
+            border-bottom: 1px solid #e1e1e1;
+        }
+
+            .feedback-item:last-child {
+                border-bottom: none;
+            }
+
+        .feedback-type-positive {
+            color: #1a8a3c;
+        }
+        /* Xanh lá */
+        .feedback-type-negative {
+            color: #d93030;
+        }
+        /* Đỏ */
+        .feedback-type-neutral {
+            color: #555;
+        }
+        /* Xám */
+
+        .feedback-comment {
+            font-size: 1rem;
+            color: #111;
+        }
+
+        .feedback-meta {
+            font-size: 0.85rem;
+            color: #777;
+        }
+
+            .feedback-meta .buyer-id {
+                font-weight: 600;
+            }
+    </style>
+</head>
+<body class="text-dark">
+    <!-- THAY ĐỔI: Bỏ bg-dark text-light, thêm text-dark -->
+    @{
+
+        List<Feedback> positiveFeedbacks = Model.Feedbacks.Where(f => f.PositiveRate >= 1).ToList();
+		List<Feedback> neutralFeedbacks = Model.Feedbacks.Where(f => f.PositiveRate == 0).ToList();
+		List<Feedback> negativeFeedbacks = Model.Feedbacks.Where(f => f.PositiveRate <= -1).ToList();   
+
+        int positiveCount = Model.Feedbacks.Count(f => f.PositiveRate >= 1);
+        int neutraCount = Model.Feedbacks.Count(f => f.PositiveRate == 0);
+        int negativeCount = Model.Feedbacks.Count(f => f.PositiveRate <= -1);
+        int totalFeedbackPoint = positiveCount + negativeCount * -1;
+
+        double deliveryOnTime = Model.Feedbacks
+        .Where(f => f.DetailFeedbacks != null && f.DetailFeedbacks.Any())
+        .SelectMany(f => f.DetailFeedbacks)
+        .Average(df => df.DeliveryOnTime) ?? 0;
+
+        double exactSame = Model.Feedbacks
+        .Where(f => f.DetailFeedbacks != null && f.DetailFeedbacks.Any())
+        .SelectMany(f => f.DetailFeedbacks)
+        .Average(df => df.ExactSame) ?? 0;
+
+        double communication = Model.Feedbacks
+        .Where(f => f.DetailFeedbacks != null && f.DetailFeedbacks.Any())
+        .SelectMany(f => f.DetailFeedbacks)
+        .Average(df => df.Communication) ?? 0;
+
+        double positivePercentage = positiveCount / (double)Model.Feedbacks.Count() * 100;
+
+        var totalOrders = Model.Products
+        .SelectMany(p => p.OrderItems)
+        .Where(oi => oi.Order != null && oi.Order.Status == "Completed")
+        .Sum(oi => oi.Quantity ?? 0);
+    }
+    <div class="container my-4" style="max-width: 800px;">
+
+        <!-- 1. Thông tin người bán (Header) -->
+        <div class="d-flex align-items-center justify-content-between seller-header">
+            <div class="d-flex align-items-center">
+                <!-- Sử dụng placeholder cho logo -->
+                <img src="https://placehold.co/60x60/333/fff?text=Logo" alt="Seller Logo" class="seller-logo me-3">
+                <div>
+                    <h1 class="h4 fw-bold mb-0">@Model.Username <span>(@totalOrders)</span></h1>
+                    <p class="feedback-percentage mb-0">@(positivePercentage.ToString("F2"))% positive Feedback <span>(@Model.Feedbacks.Count())</span></p>
+                </div>
+            </div>
+            <i class="bi bi-heart heart-icon"></i>
+        </div>
+
+        <!-- 2. Tabs điều hướng -->
+        <nav class="mt-3">
+            <div class="nav nav-tabs">
+                <a class="nav-link" href="#">Shop</a>
+                <a class="nav-link" href="#">About</a>
+                <a class="nav-link active" aria-current="page" href="#">Feedback</a>
+            </div>
+        </nav>
+
+        <!-- 3. Xếp hạng (Feedback ratings) -->
+        <div class="content-section">
+            <h2 class="h5 fw-bold">Feedback ratings: @totalFeedbackPoint </h2>
+            <p class="section-subtitle">Last 12 months</p>
+
+            <div class="row text-center mt-3 ratings-summary">
+                <div class="col">
+                    <p>Positive</p>
+                    <h3>@positiveCount</h3>
+                </div>
+                <div class="col">
+                    <p>Neutral</p>
+                    <h3>@neutraCount</h3>
+                </div>
+                <div class="col">
+                    <p>Negative</p>
+                    <h3>@negativeCount</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Xếp hạng chi tiết (Detailed seller ratings) -->
+        <div class="content-section">
+            <h2 class="h5 fw-bold">Detailed seller ratings</h2>
+            <p class="section-subtitle">Average for the last 12 months</p>
+
+            <div class="mt-4">
+                <!-- Mục 1 -->
+                <div class="detailed-rating-item">
+                    <div class="rating-label mb-1">
+                        <span>Accurate description</span>
+                        <span class="score">@exactSame</span>
+                    </div>
+                    <div class="progress" role="progressbar" aria-valuenow="98" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-bar" style="width:@((exactSame * 100 / 5.0).ToString("F2"))%"></div> <!-- 4.9/5 = 98% -->
+                    </div>
+                </div>
+                <!-- Mục 2 -->
+                <!-- Mục 3 -->
+                <div class="detailed-rating-item">
+                    <div class="rating-label mb-1">
+                        <span>Delivery time</span>
+                        <span class="score">@deliveryOnTime</span>
+                    </div>
+                    <div class="progress" role="progressbar" aria-valuenow="98" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-bar" style="width: @((deliveryOnTime * 100 / 5.0).ToString("F2"))%"></div>
+                    </div>
+                </div>
+                <!-- Mục 4 -->
+                <div class="detailed-rating-item">
+                    <div class="rating-label mb-1">
+                        <span>Communication</span>
+                        <span class="score">@communication</span>
+                    </div>
+                    <div class="progress" role="progressbar" aria-valuenow="98" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-bar" style="width:@((communication * 100 / 5.0).ToString("F2"))%"></div> <!-- 4.9/5 = 98% -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="content-section">
+            <h2 class="h5 fw-bold mb-3">Comments from buyers</h2>
+
+            <!-- Tabs cho bình luận -->
+            <!-- THAY ĐỔI: Thêm ID và các thuộc tính data-filter -->
+            <nav class="nav nav-tabs feedback-tabs" id="feedbackTabs">
+                <a class="nav-link active" aria-current="page" href="#" data-filter="all">All feedback (@Model.Feedbacks.Count())</a>
+                <a class="nav-link" href="#" data-filter="positive">Positive (@positiveCount)</a>
+                <a class="nav-link" href="#" data-filter="neutral">Neutral (@neutraCount)</a>
+                <a class="nav-link" href="#" data-filter="negative">Negative (@negativeCount)</a>
+            </nav>
+
+            <!-- Nội dung danh sách bình luận -->
+            <!-- THAY ĐỔI: Thêm ID -->
+            <div class="feedback-list-container" id="feedbackList">
+
+                <!-- Bình luận mẫu 1 -->
+                <!-- THAY ĐỔI: Thêm data-feedback-type -->
+                @foreach(var item in Model.Feedbacks)
+                {
+                    if (item.PositiveRate >= 1)
+                    {
+                        <div class="feedback-item" data-feedback-type="positive">
+                            <div class="d-flex align-items-center mb-1">
+                                <i class="bi bi-patch-plus-fill feedback-type-positive me-1"></i>
+                                <span class="fw-bold feedback-type-positive">Positive</span>
+                            </div>
+                            <p class="feedback-comment mb-1">"@item.Comment"</p>
+                            <p class="feedback-meta mb-0">
+                                Buyer: <span class="buyer-id">@(item.Orders?.Buyer?.Username ?? "Anonymous")</span>
+                            </p>
+                        </div>
+                    } else if(item.PositiveRate == 0)
+                    {
+                        <div class="feedback-item" data-feedback-type="neutral">
+                            <div class="d-flex align-items-center mb-1">
+                                <i class="bi bi-patch-exclamation-fill feedback-type-neutral me-1"></i>
+                                <span class="fw-bold feedback-type-neutral">Neutral</span>
+                            </div>
+                            <p class="feedback-comment mb-1">"@item.Comment"</p>
+                            <p class="feedback-meta mb-0">
+                                Buyer: <span class="buyer-id">@(item.Orders?.Buyer?.Username ?? "Anonymous") </span>
+                            </p>
+                        </div>
+                    } else {
+                        <div class="feedback-item" data-feedback-type="negative">
+                            <div class="d-flex align-items-center mb-1">
+                                <i class="bi bi-patch-minus-fill feedback-type-negative me-1"></i>
+                                <span class="fw-bold feedback-type-negative">Negative</span>
+                            </div>
+                            <p class="feedback-comment mb-1">"@item.Comment"</p>
+                            <p class="feedback-meta mb-0">
+                                Buyer: <span class="buyer-id">@(item.Orders?.Buyer?.Username ?? "Anonymous")</span>
+                            </p>
+                        </div>
+                }
+                }
+
+            </div>
+        </div>
+
+
+    </div>
+
+    
+
+
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const tabs = document.querySelectorAll('#feedbackTabs .nav-link');
+            const feedbackItems = document.querySelectorAll('#feedbackList .feedback-item');
+
+            // Hàm để lọc các bình luận
+            function filterFeedback(filterType) {
+                feedbackItems.forEach(item => {
+                    const itemType = item.getAttribute('data-feedback-type');
+
+                    if (filterType === 'all' || filterType === itemType) {
+                        item.style.display = 'block'; // Hiển thị mục phù hợp
+                    } else {
+                        item.style.display = 'none'; // Ẩn mục không phù hợp
+                    }
+                });
+            }
+
+            // Gắn sự kiện click cho mỗi tab
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function(event) {
+                    event.preventDefault(); // Ngăn hành vi mặc định của thẻ <a>
+
+                    // 1. Bỏ active tất cả các tab
+                    tabs.forEach(t => t.classList.remove('active'));
+
+                    // 2. Thêm active cho tab vừa nhấp
+                    this.classList.add('active');
+
+                    // 3. Lấy giá trị filter (all, positive, v.v.)
+                    const filterType = this.getAttribute('data-filter');
+
+                    // 4. Gọi hàm lọc
+                    filterFeedback(filterType);
+                });
+            });
+
+            // Khởi tạo: Hiển thị tất cả khi tải trang
+            filterFeedback('all');
+        });
+    </script>
+</body>
+</html>

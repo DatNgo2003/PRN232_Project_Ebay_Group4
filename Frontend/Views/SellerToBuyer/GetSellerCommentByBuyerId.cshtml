@@ -1,0 +1,203 @@
+﻿@model List<SellerToBuyerReview>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- THAY ĐỔI: Đổi tiêu đề trang -->
+    <title>Feedback Left for Buyers - eBay Clone</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- CSS tùy chỉnh (Dựa trên file index.html của bạn) -->
+    <style>
+        body {
+            background-color: #f7f7f7;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 14px;
+        }
+
+        /* ----- Thanh điều hướng bên trái (Sidebar) ----- */
+        .sidebar-nav .nav-link {
+            color: #212529;
+            padding: 0.35rem 1rem;
+            font-size: 0.9rem;
+        }
+
+            .sidebar-nav .nav-link:hover {
+                color: #0053a0;
+            }
+
+        .sidebar-nav .nav-item-child .nav-link {
+            padding-left: 2rem;
+        }
+
+        .sidebar-nav .nav-link.active {
+            color: #0053a0;
+            font-weight: bold;
+            background-color: transparent;
+            border-left: 3px solid #0053a0;
+            padding-left: calc(2rem - 3px);
+        }
+
+        .sidebar-nav .nav-item.parent-active > .nav-link {
+            font-weight: bold;
+        }
+
+        /* ----- Khu vực nội dung chính ----- */
+        .content-area {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 4px;
+            border: 1px solid #e1e1e1;
+        }
+
+        /* ----- (MỚI) Định dạng danh sách feedback đã gửi ----- */
+        .feedback-item {
+            padding: 1.25rem;
+            border-bottom: 1px solid #e1e1e1;
+        }
+
+            .feedback-item:last-child {
+                border-bottom: none;
+            }
+
+        .feedback-icon {
+            font-size: 1.5rem;
+            color: #1a8a3c; /* Màu xanh lá Positive */
+            margin-right: 1rem;
+        }
+
+        .feedback-comment {
+            font-size: 1rem;
+            font-style: italic;
+            color: #333;
+        }
+
+        .feedback-meta {
+            font-size: 0.85rem;
+            color: #777;
+            margin-top: 0.5rem;
+        }
+
+            .feedback-meta .buyer-id {
+                font-weight: 600;
+                color: #111;
+            }
+
+            .feedback-meta .item-link {
+                text-decoration: none;
+                color: #0053a0;
+                font-weight: 500;
+            }
+
+                .feedback-meta .item-link:hover {
+                    text-decoration: underline;
+                }
+
+    </style>
+</head>
+<body>
+
+    <div class="container-fluid my-4">
+        <div class="row">
+            <!-- Cột 1: Sidebar Navigation (Menu bên trái) -->
+            <div class="col-lg-3">
+                <!-- SAO CHÉP TỪ index.html: Giữ nguyên điều hướng dashboard -->
+                <nav class="nav flex-column sidebar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Personal Info</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Payment Information</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Account Preferences</a>
+                    </li>
+
+                    <li class="nav-item parent-active">
+                        <a class="nav-link" href="#">Selling</a>
+                    </li>
+                    <li class="nav-item nav-item-child">
+                        <a class="nav-link" href="#">Seller Dashboard</a>
+                    </li>
+                    <li class="nav-item nav-item-child">
+                        <a class="nav-link" href="#">Seller Account</a>
+                    </li>
+                    <li class="nav-item nav-item-child">
+                        <a class="nav-link" href="#">Manage communications with buyers</a>
+                    </li>
+                    <li class="nav-item nav-item-child">
+                        <a class="nav-link" href="#">Subscriptions</a>
+                    </li>
+                    <li class="nav-item nav-item-child">
+                        <a class="nav-link" href="#">Time Away</a>
+                    </li>
+                    <li class="nav-item nav-item-child">
+                        <a class="nav-link" href="#">Business Policies</a>
+                    </li>
+                    <li class="nav-item nav-item-child">
+                        <a class="nav-link" href="#">Shipping Preferences</a>
+                    </li>
+                    <li class="nav-item nav-item-child">
+                        <!-- THAY ĐỔI: Bỏ active ở đây -->
+                        <a class="nav-link" href="#">Selling preferences</a>
+                    </li>
+                    <!-- MỤC MỚI: Thêm mục này và đặt là active -->
+                    <li class="nav-item nav-item-child">
+                        <a class="nav-link active" aria-current="page" href="#">Feedback Left</a>
+                    </li>
+                </nav>
+            </div>
+
+            <!-- Cột 2: Nội dung chính (DANH SÁCH FEEDBACK ĐÃ GỬI) -->
+            <div class="col-lg-9">
+                <h1 class="h3 mb-4">Feedback left for buyers</h1>
+
+                <div class="content-area">
+                    <!-- Tiêu đề và bộ lọc (Tạm thời đơn giản) -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="h5 fw-bold mb-0">All feedback (@Model.Count)</h2>
+                        <!-- Có thể thêm bộ lọc thời gian ở đây -->
+                    </div>
+
+                    <!-- Danh sách feedback -->
+                    <div class="feedback-list">
+                        @if (Model.Count == 0)
+                        {
+                            <p>No feedback found.</p>
+                        } else
+                        {
+                            @foreach (var feedback in Model)
+                            {
+                                <div class="feedback-item d-flex">
+                                    <i class="bi bi-patch-plus-fill feedback-icon"></i>
+                                    <div>
+                                        <p class="feedback-comment mb-0">"@feedback.Comment"</p>
+                                        <p class="feedback-meta mb-0">
+                                            Left buy <span class="buyer-id">@feedback.SellerName</span> on @feedback.CreatedAt
+                                            <a href="#" class="item-link">Item #@feedback.OrderId - @feedback.ProductName</a>
+                                        </p>
+                                    </div>
+                                </div>
+
+                            }
+
+                        }
+
+                       </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Không cần JavaScript tùy chỉnh cho trang tĩnh này -->
+
+</body>
+</html>

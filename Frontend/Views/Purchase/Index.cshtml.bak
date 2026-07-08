@@ -1,0 +1,85 @@
+﻿@model List<PurchaseHistoryItemDto>
+@{
+    ViewData["Title"] = "Purchase History";
+}
+
+<div class="my-ebay-container">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="my-ebay-sidebar">
+                <h2>My eBay</h2>
+                <ul class="sidebar-nav">
+                    <li><a asp-action="Index" asp-controller="Home">Summary</a></li>
+                    <li><a href="#">Recently Viewed</a></li>
+                    <li><a href="#">Bids/Offers</a></li>
+                    <li><a href="#">Watchlist</a></li>
+                    <li><a asp-action="Index" asp-controller="Purchase" class="active">Purchases</a></li>
+                    <li><a href="#">Buy Again</a></li>
+                    <li><a href="#">Selling</a></li>
+                    <li><a href="#">Saved Searches</a></li>
+                    <li><a href="#">Saved Sellers</a></li>
+                    <li><a href="#">My Garage</a></li>
+                    <li><a href="#">Messages</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div class="purchase-history-content">
+                <h1 class="purchase-title">Purchases</h1>
+
+                <ul class="nav nav-tabs mb-3">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#">All Purchases</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Processing</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Unpaid items</a>
+                    </li>
+                </ul>
+
+                <form class="purchase-search-form">
+                    <input type="text" class="form-control" placeholder="Search your orders" />
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </form>
+
+                <div class="order-list">
+                    @if (!Model.Any())
+                    {
+                        <div class="order-card-empty text-center">
+                            <p>No orders found.</p>
+                        </div>
+                    }
+
+                    @foreach (var item in Model)
+                    {
+                        <div class="order-card">
+                            <div class="order-card-img">
+                                <img src="@item.ProductImage" alt="@item.ProductTitle" />
+                            </div>
+                            <div class="order-card-details">
+                                <h3>@item.ProductTitle</h3>
+                                <p>Order date: @item.OrderDate.ToShortDateString()</p>
+                                <p>Price: US $@item.UnitPrice?.ToString("#,##0.00")</p>
+                            </div>
+                            <div class="order-card-action">
+                                @if (item.HasReviewed)
+                                {
+                                    <span class="feedback-left-text">Feedback left</span>
+                                }
+                                else
+                                {
+                                    <a asp-controller="Purchase" asp-action="LeaveReview" asp-route-id="@item.ProductId" class="btn btn-leave-feedback">
+                                        Leave feedback
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

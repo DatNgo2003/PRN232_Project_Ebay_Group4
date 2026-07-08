@@ -1,0 +1,52 @@
+﻿using Backend.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace Backend.Repositories
+{
+    public class OrderRepository : IOrderRepository
+    {
+        private readonly CloneEbayDbContext _context;
+
+        public OrderRepository(CloneEbayDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task CreateSimpleOrderAsync(int buyerId, int productId, decimal unitPrice)
+        {
+            // 1. Tạo OrderTable
+            var newOrder = new OrderTable
+            {
+                BuyerId = buyerId,
+                OrderDate = DateTime.UtcNow,
+                TotalPrice = unitPrice,
+                Status = "Completed" // Giả định hoàn thành ngay
+            };
+
+            _context.OrderTables.Add(newOrder);
+            await _context.SaveChangesAsync(); // Lưu để lấy OrderId
+
+            // 2. Tạo OrderItem
+            var newOrderItem = new OrderItem
+            {
+                OrderId = newOrder.Id,
+                ProductId = productId,
+                Quantity = 1,
+                UnitPrice = unitPrice
+            };
+
+            _context.OrderItems.Add(newOrderItem);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<IEnumerable<OrderItem>> GetPurchaseHistoryAsync(int buyerId)
+        {
+            return await _context.OrderItems
+                .Include(oi => oi.Product) // Lấy thông tin sản phẩm
+                .Include(oi => oi.Order)   // Lấy thông tin Order (để lọc theo buyerId)
+                .Where(oi => oi.Order.BuyerId == buyerId)
+                .OrderByDescending(oi => oi.Order.OrderDate)
+                .ToListAsync();
+        }
+    }
+}

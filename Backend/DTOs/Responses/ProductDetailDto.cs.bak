@@ -1,0 +1,24 @@
+﻿using Backend.Models;
+
+namespace Backend.DTOs.Responses
+{
+    public class ProductDetailDto
+    {
+        // Thông tin cơ bản
+        public int Id { get; set; }
+        public string? Title { get; set; }
+        public string? Description { get; set; }
+        public decimal? Price { get; set; }
+        public string? Images { get; set; }
+        public string? CategoryName { get; set; }
+        public string? SellerName { get; set; }
+
+        // Thông tin Review
+        public List<ReviewDto> Reviews { get; set; } = new List<ReviewDto>();
+        public double AverageRating { get; set; }
+        public int ReviewCount { get; set; }
+
+        // Dùng cho biểu đồ 5 sao (5: 10, 4: 5, 3: 1, 2: 0, 1: 0)
+        public Dictionary<int, int> RatingCounts { get; set; } = new Dictionary<int, int>();
+    }
+}

@@ -1,0 +1,57 @@
+﻿@model IEnumerable<Backend.Models.Product>
+
+@{
+    ViewData["Title"] = "Homepage - eBay";
+}
+
+<div class="container">
+    <div class="banner">
+        <h1>Snap. Work. Play.</h1>
+        <p>Top tech at top prices.</p>
+    </div>
+
+    <div class="guarantee">
+        <div class="guarantee-text">
+            <h3>eBay Money Back Guarantee</h3>
+            <p>Get the item you ordered or get your money back.</p>
+        </div>
+        <a href="#" class="guarantee-button">Learn more</a>
+    </div>
+
+    <h3>Products</h3>
+
+    <div class="product-scroll-container">
+        <div class="product-scroll-row">
+            @foreach (var product in Model)
+            {
+                <a asp-controller="Product" asp-action="Detail" asp-route-id="@product.Id" class="product-card">
+                    <img src="@product.Images" alt="@product.Title" class="product-image">
+                    <h3 class="product-title">@product.Title</h3>
+                    <div class="product-price">US $@(product.Price?.ToString("#,##0.00"))</div>
+                </a>
+            }
+        </div>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="text-center py-5">
+            <h3>No products found</h3>
+            <p>Please check back later for new items.</p>
+        </div>
+    }
+
+    <h3>More Products (Example)</h3>
+    <div class="product-scroll-container">
+        <div class="product-scroll-row">
+            @foreach (var product in Model.Reverse())
+            {
+                <a asp-controller="Product" asp-action="Detail" asp-route-id="@product.Id" class="product-card">
+                    <img src="@product.Images" alt="@product.Title" class="product-image">
+                    <h3 class="product-title">@product.Title</h3>
+                    <div class="product-price">US $@(product.Price?.ToString("#,##0.00"))</div>
+                </a>
+            }
+        </div>
+    </div>
+</div>

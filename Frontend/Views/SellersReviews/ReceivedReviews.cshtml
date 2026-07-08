@@ -1,0 +1,37 @@
+﻿@model IEnumerable<Frontend.Models.ReviewsViewModel>
+
+@{
+    ViewData["Title"] = "Reviews Received as Buyer";
+}
+
+<div class="container mt-4">
+    <h2>Reviews Received as Buyer</h2>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+    }
+    @if (ViewData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger">@ViewData["ErrorMessage"]</div>
+    }
+
+    @if (Model == null || !Model.Any())
+    {
+        <p>You have not received any reviews yet.</p>
+    }
+    else
+    {
+        <div class="list-group">
+            @foreach (var review in Model.OrderByDescending(r => r.CreatedAt))
+            {
+                <div class="list-group-item">
+                    <p class="mb-1"><strong>Comment:</strong> @review.Comment</p>
+                    <small class="text-muted">
+                        Received on: @review.CreatedAt?.ToString("yyyy-MM-dd HH:mm")
+                    </small>
+                </div>
+            }
+        </div>
+    }
+</div>

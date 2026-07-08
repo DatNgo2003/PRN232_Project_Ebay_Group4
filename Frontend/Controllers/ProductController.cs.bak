@@ -1,0 +1,101 @@
+﻿using Frontend.Helpers;
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+using Backend.DTOs.Responses;
+
+namespace Frontend.Controllers
+{
+    public class ProductController : Controller
+    {
+        private readonly ApiClientHelper _apiClient;
+        private readonly ILogger<ProductController> _logger;
+
+        public ProductController(ApiClientHelper apiClient, ILogger<ProductController> logger)
+        {
+            _apiClient = apiClient;
+            _logger = logger;
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> Detail(int id)
+        {
+            try
+            {
+                var response = await _apiClient.GetAsync($"products/{id}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    };
+
+                    var productDetail = JsonSerializer.Deserialize<ProductDetailDto>(content, options);
+
+                    if (productDetail == null)
+                    {
+                        _logger.LogWarning($"Không thể deserialize ProductDetailDto cho ID: {id}");
+                        return View("NotFound");
+                    }
+
+                    return View(productDetail);
+                }
+
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    _logger.LogWarning($"API không tìm thấy sản phẩm với ID: {id}");
+                    return View("NotFound");
+                }
+
+                _logger.LogError($"Lỗi API khi gọi products/{id}: {response.ReasonPhrase}");
+                return View("Error");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Lỗi nghiêm trọng khi lấy chi tiết sản phẩm ID: {id}");
+                return View("Error");
+            }
+        }
+
+        // === CẬP NHẬT ACTION (Giai đoạn 5) ===
+        [HttpPost]
+        public async Task<IActionResult> Buy(int id)
+        {
+            try
+            {
+                // Sửa lỗi: Gọi PostEmptyAsync thay vì PostAsync
+                // để gửi một POST request không có body,
+                // khớp với [FromQuery] của Backend.
+                var response = await _apiClient.PostEmptyAsync($"order/quick-buy?productId={id}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    // Mua thành công, chuyển đến Lịch sử mua hàng
+                    return RedirectToAction("Index", "Purchase");
+                }
+
+                // Nếu token hết hạn hoặc lỗi
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    // Chuyển về trang đăng nhập
+                    return RedirectToAction("Login", "Auth");
+                }
+
+                // Lỗi khác (ví dụ: sản phẩm không tồn tại)
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError($"Lỗi API khi gọi order/quick-buy: {response.ReasonPhrase}. Content: {errorContent}");
+
+                // Quay lại trang chi tiết sản phẩm
+                return RedirectToAction("Detail", new { id = id });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Lỗi nghiêm trọng khi Buy sản phẩm ID: {id}");
+                return View("Error");
+            }
+        }
+        // === KẾT THÚC CẬP NHẬT ===
+    }
+}

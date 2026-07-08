@@ -1,0 +1,236 @@
+﻿/* ===============================================
+   LEAVE REVIEW MODAL - EBAY STYLE (2024-2025)
+   =============================================== */
+
+.leave-review-modal-content {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+    .leave-review-modal-content .modal-header {
+        padding: 1.25rem 1.5rem;
+        background-color: #fff;
+    }
+
+    .leave-review-modal-content .modal-body {
+        background-color: #fff;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+/* Product Info Section */
+.product-info-section {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.product-thumbnail {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.product-info-text {
+    flex: 1;
+    min-width: 0;
+}
+
+    .product-info-text h2 {
+        color: #111827;
+        line-height: 1.4;
+        word-wrap: break-word;
+    }
+
+/* Star Rating Container */
+.star-rating-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Star Rating (eBay Style) */
+.star-rating {
+    display: inline-flex;
+    flex-direction: row-reverse;
+    gap: 0.25rem;
+    font-size: 2.5rem;
+    line-height: 1;
+}
+
+    .star-rating input[type="radio"] {
+        display: none;
+    }
+
+    .star-rating label {
+        color: #d1d5db;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+
+        .star-rating label:hover {
+            transform: scale(1.1);
+        }
+
+            /* Hover effect - fill stars from right to left */
+            .star-rating label:hover,
+            .star-rating label:hover ~ label {
+                color: #FFB81C;
+            }
+
+    /* Checked state */
+    .star-rating input[type="radio"]:checked ~ label {
+        color: #FFB81C;
+    }
+
+.star-rating-hint {
+    color: #6b7280;
+    font-style: italic;
+    min-width: 80px;
+}
+
+/* Feedback Textarea */
+.feedback-textarea {
+    border: 1.5px solid #d1d5db;
+    border-radius: 8px;
+    resize: vertical;
+    font-size: 0.95rem;
+    padding: 0.75rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+    .feedback-textarea:focus {
+        border-color: #3665F3;
+        box-shadow: 0 0 0 3px rgba(54, 101, 243, 0.1);
+    }
+
+    .feedback-textarea::placeholder {
+        color: #9ca3af;
+    }
+
+/* Upload Placeholder */
+.upload-placeholder-container {
+    border: 2px dashed #d1d5db;
+    border-radius: 8px;
+    background-color: #f9fafb;
+    transition: all 0.2s;
+}
+
+    .upload-placeholder-container:hover {
+        border-color: #9ca3af;
+        background-color: #f3f4f6;
+    }
+
+.upload-placeholder {
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    color: #6b7280;
+}
+
+    .upload-placeholder .upload-icon {
+        color: #9ca3af;
+        margin-bottom: 0.75rem;
+    }
+
+    .upload-placeholder p {
+        margin: 0;
+    }
+
+/* Submit Button */
+.btn-leave-feedback {
+    background-color: #3665F3;
+    border: none;
+    color: white;
+    font-weight: 600;
+    padding: 0.875rem 1.5rem;
+    border-radius: 24px;
+    font-size: 1rem;
+    transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+    .btn-leave-feedback:hover {
+        background-color: #2952cc;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(54, 101, 243, 0.3);
+        color: white;
+    }
+
+    .btn-leave-feedback:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+/* Cancel Button */
+.btn-outline-secondary {
+    border-radius: 24px;
+    padding: 0.875rem 1.5rem;
+    font-weight: 600;
+    border: 1.5px solid #d1d5db;
+    color: #374151;
+    transition: all 0.2s;
+}
+
+    .btn-outline-secondary:hover {
+        background-color: #f3f4f6;
+        border-color: #9ca3af;
+        color: #111827;
+    }
+
+/* Form Labels */
+.leave-review-modal-content .form-label {
+    color: #111827;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Modal Backdrop */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+/* Responsive Design for Modal */
+@media (max-width: 768px) {
+    .leave-review-modal-content .modal-body {
+        padding: 1.5rem !important;
+        max-height: 80vh;
+    }
+
+    .star-rating {
+        font-size: 2rem;
+    }
+
+    .product-thumbnail {
+        width: 60px;
+        height: 60px;
+    }
+
+    .upload-placeholder {
+        padding: 2rem 1rem;
+    }
+}
+
+/* Animation for validation errors */
+@keyframes shake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-5px);
+    }
+
+    75% {
+        transform: translateX(5px);
+    }
+}
+
+#ratingError {
+    animation: shake 0.3s ease;
+}

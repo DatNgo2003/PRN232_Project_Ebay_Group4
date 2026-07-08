@@ -1,0 +1,53 @@
+﻿@model Frontend.Models.SellerLeaveReviewViewModel
+@{
+    ViewData["Title"] = "Leave Review for Buyer";
+}
+<div class="container mt-4" style="max-width: 800px;">
+    <div class="card">
+        <div class="card-body">
+            <h2 class="card-title">Leave Review</h2>
+            <p class="text-muted">It may take several minutes to process your automated feedback.</p>
+            <hr>
+
+            <form asp-action="LeaveReview" method="post">
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+                <input type="hidden" asp-for="OrderId" />
+                <input type="hidden" asp-for="ProductId" />
+
+                <div class="mb-3">
+                    <p><strong>Use one of our saved comments:</strong></p>
+                    <div class="d-flex flex-wrap" style="gap: 8px;">
+                        <button type="button" class="btn btn-outline-secondary btn-sm review-template">Great communication. A pleasure to do business with.</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm review-template">Good buyer, prompt payment, valued customer, highly recommended.</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm review-template">Thank you for an easy, pleasant transaction. Excellent buyer. A+++++.</button>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <textarea asp-for="Comment" class="form-control" rows="3" placeholder="I am very happy to have You as our Customer..." required></textarea>
+                    <span asp-validation-for="Comment" class="text-danger"></span>
+                </div>
+
+                <div class="d-flex justify-content-end" style="gap: 10px;">
+                    <a asp-controller="Purchase" asp-action="Index" class="btn btn-light">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.review-template').forEach(button => {
+                button.addEventListener('click', function() {
+                    document.getElementById('Comment').value = this.innerText;
+                });
+            });
+        });
+    </script>
+}

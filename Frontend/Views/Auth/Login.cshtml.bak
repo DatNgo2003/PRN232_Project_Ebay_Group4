@@ -1,0 +1,59 @@
+﻿@{
+    ViewData["Title"] = "Login";
+}
+
+<div class="container" style="max-width: 500px; margin-top: 5rem; margin-bottom: 5rem;">
+    <div class="card p-4">
+        <h2 class="text-center">Sign in</h2>
+        <div id="alert-message" class="alert alert-danger" style="display: none;"></div>
+
+        <form id="loginForm">
+            <div class="form-group mb-3">
+                <label for="username" class="form-label">Username or Email</label>
+                <input id="username" name="UsernameOrEmail" class="form-control" required />
+            </div>
+            <div class="form-group mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input id="password" name="Password" type="password" class="form-control" required />
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Login</button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById("loginForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const data = {
+                UsernameOrEmail: document.getElementById("username").value,
+                Password: document.getElementById("password").value
+            };
+
+            const res = await fetch("/Auth/LoginApi", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+
+            const result = await res.json();
+            const alertBox = document.getElementById("alert-message");
+
+            if (result.success) {
+                // === SỬA LỖI (Bỏ localStorage) ===
+                // Máy chủ đã lưu token vào Session.
+                // JavaScript chỉ cần chuyển hướng.
+                // localStorage.setItem("token", result.token);
+                // localStorage.setItem("user", JSON.stringify(result.user));
+
+                // Chuyển về trang chủ
+                window.location.href = "/";
+            } else {
+                // Hiển thị lỗi
+                alertBox.innerText = result.message || "Login failed";
+                alertBox.style.display = "block";
+            }
+        });
+    </script>
+}

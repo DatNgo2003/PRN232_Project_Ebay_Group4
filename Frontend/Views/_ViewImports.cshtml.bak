@@ -1,0 +1,6 @@
+﻿@using Frontend
+@using Frontend.Models
+@using Backend.Models // Thêm
+@using Backend.DTOs.Responses // Thêm
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers

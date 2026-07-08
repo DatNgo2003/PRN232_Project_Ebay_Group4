@@ -1,0 +1,13 @@
+using Backend.DTOs.Responses; // Thêm
+using Backend.Models;
+
+namespace Backend.Services
+{
+    public interface IProductService
+    {
+        Task<IEnumerable<Product>> GetProductsAsync();
+
+        // Thêm phương thức mới từ Giai đoạn 4
+        Task<ProductDetailDto?> GetProductDetailAsync(int id);
+    }
+}

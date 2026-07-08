@@ -1,0 +1,31 @@
+services:
+
+  api:
+    build:
+      context: .
+      dockerfile: Backend/Dockerfile
+    expose:
+      - "8080"
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./Backend/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./Backend/proxy.conf:/etc/nginx/proxy.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: always
+
+    
+  # db:
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   container_name: sqlserver
+  #   environment:
+  #     SA_PASSWORD: "KhongCoMatKhau123@"
+  #     ACCEPT_EULA: "Y"
+  #   ports:
+  #     - "1433:1433"
+  #   restart: always

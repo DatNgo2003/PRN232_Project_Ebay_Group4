@@ -1,0 +1,25 @@
+<div id="chat-root">
+    <!-- Chat floating button -->
+    <button id="chat-toggle-btn" class="chat-toggle" aria-label="Toggle chat">
+        <span id="chat-badge" class="chat-badge" style="display:none">0</span>
+        💬
+    </button>
+
+    <!-- Chat window -->
+    <div id="chat-window" class="chat-window hidden" role="dialog" aria-label="Chat with admin">
+        <div class="chat-sidebar" id="chat-sidebar">
+            <div class="chat-sidebar-header">Active Conversations</div>
+            <ul id="chat-user-list" class="chat-user-list"></ul>
+        </div>
+
+        <div class="chat-panel" id="chat-panel">
+            <div class="chat-header" id="chat-header">Chat</div>
+            <div class="chat-body" id="chat-body" aria-live="polite"></div>
+            <div class="chat-footer">
+                <button id="chat-emoji" class="chat-emoji" title="Insert emoji">😊</button>
+                <input id="chat-input" class="chat-input" placeholder="Type a message..." />
+                <button id="chat-send" class="chat-send" title="Send message"><span class="send-icon">➤</span></button>
+            </div>
+        </div>
+    </div>
+</div>

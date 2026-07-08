@@ -1,0 +1,65 @@
+﻿using Microsoft.AspNetCore.Http;
+using System.Net.Http.Headers;
+using System.Net.Http; // Thêm
+
+namespace Frontend.Helpers
+{
+    public class ApiClientHelper
+    {
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+
+        public ApiClientHelper(
+            IHttpClientFactory httpClientFactory,
+            IHttpContextAccessor httpContextAccessor)
+        {
+            _httpClientFactory = httpClientFactory;
+            _httpContextAccessor = httpContextAccessor;
+        }
+
+        public HttpClient GetHttpClientWithAuth()
+        {
+            var client = _httpClientFactory.CreateClient("API");
+
+            var token = _httpContextAccessor.HttpContext?.Session.GetString("JwtToken");
+
+            if (!string.IsNullOrEmpty(token))
+            {
+                client.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            return client;
+        }
+
+        public async Task<HttpResponseMessage> GetAsync(string endpoint)
+        {
+            var client = GetHttpClientWithAuth();
+            return await client.GetAsync(endpoint);
+        }
+
+        public async Task<HttpResponseMessage> PostAsync<T>(string endpoint, T data)
+        {
+            var client = GetHttpClientWithAuth();
+            return await client.PostAsJsonAsync(endpoint, data);
+        }
+
+        public async Task<HttpResponseMessage> PostEmptyAsync(string endpoint)
+        {
+            var client = GetHttpClientWithAuth();
+            return await client.PostAsync(endpoint, null);
+        }
+
+        public async Task<HttpResponseMessage> PutAsync<T>(string endpoint, T data)
+        {
+            var client = GetHttpClientWithAuth();
+            return await client.PutAsJsonAsync(endpoint, data);
+        }
+
+        public async Task<HttpResponseMessage> DeleteAsync(string endpoint)
+        {
+            var client = GetHttpClientWithAuth();
+            return await client.DeleteAsync(endpoint);
+        }
+    }
+}

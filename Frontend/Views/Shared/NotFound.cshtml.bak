@@ -1,0 +1,9 @@
+﻿@{
+    ViewData["Title"] = "Not Found";
+}
+
+<div class="text-center" style="padding: 5rem 0;">
+    <h1 class="display-4">404 - Not Found</h1>
+    <p>Sorry, the page or resource you requested could not be found.</p>
+    <a asp-controller="Home" asp-action="Index">Return to Homepage</a>
+</div>

@@ -1,0 +1,454 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gửi Khiếu Nại</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .step-content { display: none; }
+        .step-content.active { display: block; }
+        .item-list .list-group-item { cursor: pointer; transition: background-color 0.2s; }
+        .item-list .list-group-item:hover { background-color: #f1f1f1; }
+        .item-list .list-group-item.selected { background-color: #e0efff; border-color: #0d6efd; font-weight: bold; }
+        .item-details { padding-left: 15px; }
+        .reason-details { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white py-3">
+                        <h2 class="h4 mb-0">Mở Khiếu Nại Mới</h2>
+                        <p class="text-muted mb-0">Chúng tôi sẽ giúp bạn giải quyết vấn đề với đơn hàng.</p>
+                    </div>
+                    <div class="card-body p-4 p-md-5">
+
+                        <div class="progress mb-4" style="height: 20px;">
+                            <div id="progressBar" class="progress-bar" role="progressbar" style="width: 25%;">Bước 1/4</div>
+                        </div>
+
+                        <form id="disputeForm">
+
+                            <div id="step-1" class="step-content">
+                                <h5 class="mb-3">Bước 1: Chọn đơn hàng bạn muốn khiếu nại</h5>
+                                <p class="text-muted">Chỉ các đơn hàng đã giao hoặc đang giao mới được hiển thị.</p>
+
+                                <div id="order-list-loading" class="text-center p-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Đang tải đơn hàng...</span>
+                                    </div>
+                                    <p class="mt-2">Đang tải đơn hàng của bạn...</p>
+                                </div>
+
+                                <div id="order-list-error" class="alert alert-danger" style="display:none;"></div>
+
+                                <div class="item-list">
+                                    <div class="list-group" id="order-list-container">
+                                    </div>
+                                </div>
+
+                                <div class="text-end mt-4">
+                                    <button type="button" class="btn btn-primary btn-lg" id="btn-step-1" disabled>Tiếp theo <i class="bi bi-arrow-right"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="step-2" class="step-content">
+                                <h5 class="mb-3">Bước 2: Lý do bạn khiếu nại là gì?</h5>
+                                <p class="text-muted">Bạn đang khiếu nại cho đơn hàng: <strong id="selectedItemName"></strong></p>
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="reason" id="reason-not-received" value="not-received">
+                                    <label class="form-check-label h6 ms-2" for="reason-not-received">Tôi không nhận được hàng</label>
+                                </div>
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="reason" id="reason-not-as-described" value="not-described">
+                                    <label class="form-check-label h6 ms-2" for="reason-not-as-described">Sản phẩm không đúng như mô tả</label>
+                                </div>
+                                <div class="d-flex justify-content-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary btn-back" data-step="1"><i class="bi bi-arrow-left"></i> Quay lại</button>
+                                    <button type="button" class="btn btn-primary btn-lg" id="btn-step-2" disabled>Tiếp theo <i class="bi bi-arrow-right"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="step-3" class="step-content">
+                                <h5 class="mb-3">Bước 3: Cung cấp thêm chi tiết</h5>
+                                <div id="details-not-received" class="reason-details">
+                                    <div class="alert alert-warning">
+                                        Vui lòng kiểm tra lại với người thân hoặc hàng xóm. Nếu bạn chắc chắn chưa nhận được, hãy tiếp tục.
+                                    </div>
+                                </div>
+                                <div id="details-not-described" class="reason-details">
+                                    <div class="mb-3">
+                                        <label for="reason-details-select" class="form-label">Vui lòng mô tả rõ hơn:</label>
+                                        <select class="form-select" id="reason-details-select">
+                                            <option value="">Chọn một lý do...</option>
+                                            <option value="damaged">Sản phẩm bị hỏng, vỡ</option>
+                                            <option value="wrong-item">Gửi sai sản phẩm</option>
+                                            <option value="missing-parts">Sản phẩm thiếu bộ phận/phụ kiện</option>
+                                            <option value="fake">Hàng giả</option>
+                                            <option value="different">Không giống ảnh/mô tả</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="dispute-comment" class="form-label">Nội dung khiếu nại (bắt buộc):</label>
+                                    <textarea class="form-control" id="dispute-comment" rows="5" placeholder="Mô tả chi tiết vấn đề của bạn... (Tối thiểu 20 ký tự)"></textarea>
+                                </div>
+                                <div class="d-flex justify-content-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary btn-back" data-step="2"><i class="bi bi-arrow-left"></i> Quay lại</button>
+                                    <button type="button" class="btn btn-primary btn-lg" id="btn-step-3" disabled>Tiếp theo <i class="bi bi-arrow-right"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="step-4" class="step-content">
+                                <h5 class="mb-3">Bước 4: Bạn mong muốn giải pháp gì?</h5>
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="resolution" id="resolution-refund" value="refund">
+                                    <label class="form-check-label h6 ms-2" for="resolution-refund">Hoàn tiền 100%</label>
+                                </div>
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="resolution" id="resolution-partial" value="partial-refund">
+                                    <label class="form-check-label h6 ms-2" for="resolution-partial">Hoàn tiền một phần</label>
+                                </div>
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="resolution" id="resolution-replace" value="replace">
+                                    <label class="form-check-label h6 ms-2" for="resolution-replace">Gửi hàng thay thế</label>
+                                </div>
+                                <div id="final-error-message" class="alert alert-danger mt-3" style="display:none;"></div>
+                                <div class="d-flex justify-content-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary btn-back" data-step="3"><i class="bi bi-arrow-left"></i> Quay lại</button>
+                                    <button type="button" class="btn btn-primary btn-lg" id="btn-submit-dispute" disabled>Gửi Khiếu nại</button>
+                                </div>
+                            </div>
+
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="confirmModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Xác nhận gửi khiếu nại</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Khiếu nại của bạn sẽ được gửi đến người bán. Bạn có chắc chắn muốn gửi?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" id="btn-final-submit">Đồng ý gửi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+
+            // === CẤU HÌNH (ĐÃ THAY ĐỔI) ===
+            const TOTAL_STEPS = 4;
+            const STATE_KEY = "disputeFormState";
+
+            // SỬA LỖI: Đọc token được "inject" từ Controller (ViewData)
+            // Razor sẽ render giá trị của token vào đây
+            const API_TOKEN = @Html.Raw(Json.Serialize(ViewData["ApiToken"]));
+
+            // SỬA LỖI: URL gọi thẳng đến Backend
+            const API_BASE_URL = "https://localhost:7233/api";
+
+            // === LẤY CÁC ĐỐI TƯỢNG DOM (Không đổi) ===
+            const progressBar = document.getElementById('progressBar');
+            // ... (tất cả các biến getElementById khác) ...
+            const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+            const finalErrorMessage = document.getElementById('final-error-message');
+            const orderListContainer = document.getElementById('order-list-container');
+            const orderListLoading = document.getElementById('order-list-loading');
+            const orderListError = document.getElementById('order-list-error');
+            const btnStep1 = document.getElementById('btn-step-1');
+            const btnStep2 = document.getElementById('btn-step-2');
+            const btnStep3 = document.getElementById('btn-step-3');
+            const btnSubmitDispute = document.getElementById('btn-submit-dispute');
+            const btnFinalSubmit = document.getElementById('btn-final-submit');
+            const backButtons = document.querySelectorAll('.btn-back');
+            let items = [];
+            const reasonRadios = document.querySelectorAll('input[name="reason"]');
+            const resolutionRadios = document.querySelectorAll('input[name="resolution"]');
+            const reasonDetailSelect = document.getElementById('reason-details-select');
+            const disputeComment = document.getElementById('dispute-comment');
+            let state = {
+                currentStep: 1,
+                data: {
+                    itemId: null, itemName: null, reason: null,
+                    reasonDetail: null, comment: null, resolution: null
+                }
+            };
+
+            // === CÁC HÀM QUẢN LÝ TRẠNG THÁI (Không đổi) ===
+            function saveState() {
+                sessionStorage.setItem(STATE_KEY, JSON.stringify(state));
+            }
+            function goToStep(step, isLoading = false) {
+                if (document.getElementById(`step-${state.currentStep}`)) {
+                    document.getElementById(`step-${state.currentStep}`).classList.remove('active');
+                }
+                document.getElementById(`step-${step}`).classList.add('active');
+                state.currentStep = step;
+                updateProgressBar();
+                if (!isLoading) {
+                    saveState();
+                }
+            }
+            function updateProgressBar() {
+                const percentage = (state.currentStep / TOTAL_STEPS) * 100;
+                progressBar.style.width = percentage + '%';
+                progressBar.innerText = `Bước ${state.currentStep}/${TOTAL_STEPS}`;
+            }
+            function toggleReasonDetails(reasonValue) {
+                document.getElementById('details-not-received').style.display = (reasonValue === 'not-received') ? 'block' : 'none';
+                document.getElementById('details-not-described').style.display = (reasonValue === 'not-described') ? 'block' : 'none';
+            }
+            function validateStep3() {
+                const commentValid = disputeComment.value.trim().length >= 20;
+                let detailValid = true;
+                if (state.data.reason === 'not-described') {
+                    detailValid = reasonDetailSelect.value !== "";
+                }
+                btnStep3.disabled = !(commentValid && detailValid);
+            }
+            function loadState() {
+                const savedState = sessionStorage.getItem(STATE_KEY);
+                if (savedState) {
+                    state = JSON.parse(savedState);
+                    console.log("Đã tải trạng thái:", state);
+                    repopulateForm();
+                    goToStep(state.currentStep, true);
+                } else {
+                    goToStep(1, true);
+                }
+            }
+            function repopulateForm() {
+                const data = state.data;
+                if (data.itemId) {
+                    const selectedItem = document.querySelector(`.list-group-item[data-item-id="${data.itemId}"]`);
+                    if (selectedItem) {
+                        selectedItem.classList.add('selected');
+                        btnStep1.disabled = false;
+                        document.getElementById('selectedItemName').innerText = data.itemName;
+                    }
+                }
+                if (data.reason) {
+                    const selectedReason = document.querySelector(`input[name="reason"][value="${data.reason}"]`);
+                    if (selectedReason) {
+                        selectedReason.checked = true;
+                        btnStep2.disabled = false;
+                        toggleReasonDetails(data.reason);
+                    }
+                }
+                if (data.reasonDetail) { reasonDetailSelect.value = data.reasonDetail; }
+                if (data.comment) {
+                    disputeComment.value = data.comment;
+                    validateStep3();
+                }
+                if (data.resolution) {
+                    const selectedResolution = document.querySelector(`input[name="resolution"][value="${data.resolution}"]`);
+                    if (selectedResolution) {
+                        selectedResolution.checked = true;
+                        btnSubmitDispute.disabled = false;
+                    }
+                }
+            }
+            function attachStep1Listeners() {
+                items = document.querySelectorAll('.item-list .list-group-item');
+                items.forEach(item => {
+                    item.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        items.forEach(i => i.classList.remove('selected'));
+                        this.classList.add('selected');
+                        btnStep1.disabled = false;
+                        state.data.itemId = this.dataset.itemId;
+                        state.data.itemName = this.dataset.itemName;
+                        document.getElementById('selectedItemName').innerText = state.data.itemName;
+                        saveState();
+                    });
+                });
+            }
+
+            // === HÀM TẢI ĐƠN HÀNG (ĐÃ SỬA) ===
+            async function fetchDisputableOrders() {
+                // SỬA LỖI: Kiểm tra biến API_TOKEN
+                if (!API_TOKEN) {
+                    orderListLoading.style.display = 'none';
+                    orderListError.innerText = "Lỗi xác thực: Không tìm thấy token. Vui lòng đăng nhập lại.";
+                    orderListError.style.display = 'block';
+                    loadState(); // Vẫn tải state để kích hoạt bước 1
+                    return;
+                }
+
+                try {
+                    // SỬA LỖI: Gọi thẳng đến Backend và dùng API_TOKEN
+                    const response = await fetch(`${API_BASE_URL}/dispute/disputable`, {
+                        headers: { 'Authorization': 'Bearer ' + API_TOKEN }
+                    });
+
+                    if (response.status === 401) {
+                        throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+                    }
+                    if (!response.ok) {
+                        throw new Error(`Lỗi ${response.status}: Không thể tải danh sách đơn hàng.`);
+                    }
+
+                    const orders = await response.json();
+                    console.log("Danh sách đơn hàng:", orders);
+                    renderOrderList(orders);
+                    attachStep1Listeners();
+                } catch (error) {
+                    console.error("Lỗi tải đơn hàng:", error);
+                    orderListLoading.style.display = 'none';
+                    orderListError.innerText = error.message;
+                    orderListError.style.display = 'block';
+                } finally {
+                    loadState();
+                }
+            }
+
+            function renderOrderList(orders) {
+                // (Hàm này không thay đổi)
+                orderListLoading.style.display = 'none';
+                if (orders.length === 0) {
+                    orderListError.innerText = "Bạn không có đơn hàng nào hợp lệ để khiếu nại.";
+                    orderListError.style.display = 'block';
+                    return;
+                }
+                let html = '';
+                orders.forEach(order => {
+                    const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : 'Không rõ';
+                    html += `
+                                <a href="#" class="list-group-item list-group-item-action" data-item-id="${order.orderId}" data-item-name="${order.primaryProductName}">
+                                    <div class="d-flex w-100 item-details">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">${order.primaryProductName}</h6>
+                                            <p class="mb-1 text-muted">
+                                                Đơn hàng: #${order.orderId} | Người bán: ${order.sellerName}
+                                            </p>
+                                            <small>Ngày đặt: ${orderDate} (Trạng thái: ${order.orderStatus})</small>
+                                        </div>
+                                    </div>
+                                </a>
+                            `;
+                });
+                orderListContainer.innerHTML = html;
+            }
+
+            // === GẮN CÁC SỰ KIỆN CỐ ĐỊNH (Không đổi) ===
+            btnStep1.addEventListener('click', () => goToStep(2));
+            btnStep2.addEventListener('click', () => goToStep(3));
+            btnStep3.addEventListener('click', () => goToStep(4));
+            reasonRadios.forEach(radio => {
+                radio.addEventListener('change', function () {
+                    btnStep2.disabled = false;
+                    state.data.reason = this.value;
+                    toggleReasonDetails(this.value);
+                    saveState();
+                });
+            });
+            reasonDetailSelect.addEventListener('change', function () {
+                state.data.reasonDetail = this.value; validateStep3(); saveState();
+            });
+            disputeComment.addEventListener('input', function () {
+                state.data.comment = this.value; validateStep3(); saveState();
+            });
+            resolutionRadios.forEach(radio => {
+                radio.addEventListener('change', function () {
+                    btnSubmitDispute.disabled = false;
+                    state.data.resolution = this.value;
+                    saveState();
+                });
+            });
+            backButtons.forEach(button => {
+                button.addEventListener('click', function () {
+                    goToStep(parseInt(this.dataset.step));
+                });
+            });
+            btnSubmitDispute.addEventListener('click', () => {
+                confirmModal.show();
+            });
+
+            // === LOGIC GỬI API (ĐÃ SỬA) ===
+            btnFinalSubmit.addEventListener('click', function () {
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Đang gửi...';
+                finalErrorMessage.style.display = 'none';
+
+                // SỬA LỖI: Kiểm tra biến API_TOKEN
+                if (!API_TOKEN) {
+                    finalErrorMessage.innerText = "Lỗi xác thực: Không tìm thấy token.";
+                    finalErrorMessage.style.display = 'block';
+                    this.disabled = false; this.innerHTML = 'Đồng ý gửi'; return;
+                }
+
+                const finalDescription = `
+        Yêu cầu giải quyết: ${state.data.resolution || 'Chưa chọn'}
+        Lý do chính: ${state.data.reason || 'Chưa chọn'}
+        Chi tiết lý do: ${state.data.reasonDetail || 'Không có'}
+        ---
+        Nội dung từ người dùng:
+        ${state.data.comment || 'Không có'}
+                        `;
+
+                const apiBody = {
+                    orderId: parseInt(state.data.itemId),
+                    description: finalDescription.trim()
+                };
+
+                // SỬA LỖI: Gọi thẳng đến Backend và dùng API_TOKEN
+                fetch(`${API_BASE_URL}/dispute`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + API_TOKEN
+                    },
+                    body: JSON.stringify(apiBody)
+                })
+                    .then(response => {
+                        if (response.status === 401) {
+                            throw new Error("Phiên đăng nhập đã hết hạn.");
+                        }
+                        if (!response.ok) {
+                            return response.text().then(text => { throw new Error(text || `Lỗi ${response.status}`); });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        confirmModal.hide();
+                        alert('Gửi khiếu nại thành công!');
+                        sessionStorage.removeItem(STATE_KEY);
+                        window.location.href = '/'; // Chuyển về trang chủ
+                    })
+                    .catch(error => {
+                        console.error("Lỗi khi gửi khiếu nại:", error);
+                        finalErrorMessage.innerText = `Lỗi: ${error.message}`;
+                        finalErrorMessage.style.display = 'block';
+                        confirmModal.hide();
+                        this.disabled = false; this.innerHTML = 'Đồng ý gửi';
+                        document.getElementById('final-error-message').innerText = `Lỗi: ${error.message}`;
+                        document.getElementById('final-error-message').style.display = 'block';
+                    });
+            });
+
+            // === KHỞI CHẠY ===
+            fetchDisputableOrders();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,453 @@
+﻿@model List<PurchaseHistoryItemDto>
+@using Frontend.Helpers
+@section Styles {
+    <link rel="stylesheet" href="~/css/purchase-history.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/leave-review-modal.css" asp-append-version="true" />
+    <style>
+        /* CSS Thêm để phân biệt các trạng thái */
+        .feedback-state-text {
+            font-size: 0.9rem;
+            color: #555;
+            font-style: italic;
+            white-space: nowrap;
+        }
+
+            .feedback-state-text.dispute {
+                color: #d9534f; /* Màu đỏ cho tranh chấp */
+                font-weight: 600;
+            }
+
+        /* CSS Thêm cho Order Number */
+        .order-info-details {
+            display: flex;
+            gap: 1.5rem; /* Tăng khoảng cách một chút */
+        }
+
+        /* Đảm bảo mã đơn hàng không bị ngắt dòng */
+        .order-info-est .fw-bold {
+            white-space: nowrap;
+        }
+
+    </style>
+}
+@{
+    ViewData["Title"] = "Purchases";
+}
+
+<div class="container-fluid px-3 px-md-5 py-4">
+
+    @* ... (Phần my-ebay-header và sidebar giữ nguyên) ... *@
+    <div class="my-ebay-header">
+        <div class="my-ebay-title-nav">
+            <h1 class="my-ebay-title">My eBay</h1>
+            <ul class="my-ebay-subnav">
+                <li><a href="#">Activity</a></li>
+                <li><a href="#">Messages</a></li>
+                <li><a href="#">Account</a></li>
+            </ul>
+        </div>
+        <div class="my-ebay-user">
+            <a href="#">username(0)</a>
+        </div>
+    </div>
+
+    <div class="row gx-4">
+        <div class="col-12 col-md-3 col-lg-2">
+            <div class="my-ebay-sidebar">
+                <ul class="sidebar-nav list-unstyled">
+                    <li><a asp-action="Index" asp-controller="Home">Summary</a></li>
+                    <li><a href="#">Recently Viewed</a></li>
+                    <li><a href="#">Bids/Offers</a></li>
+                    <li><a href="#">Watchlist</a></li>
+                    <li>
+                        <a asp-action="Index" asp-controller="Purchase" class="active">Purchases</a>
+                    </li>
+                    <li><a href="#">Saved feed <span class="sidebar-new-badge">NEW</span></a></li>
+                    <li><a href="#">Saved searches</a></li>
+                    <li><a href="#">Saved sellers</a></li>
+                    <li class="sidebar-section-divider"></li>
+                    <li><a href="#">Selling</a></li>
+                    <li><a href="#">My Garage</a></li>
+                    <li><a href="#">My Collection</a></li>
+                    <li><a href="#">Sizes</a></li>
+                    <li><a href="#">PSA Vault</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-9 col-lg-10">
+            <div class="purchase-history-content">
+
+                @* ... (Phần purchase-header và purchase-view-options giữ nguyên) ... *@
+                <div class="purchase-header">
+                    <h2 class="purchase-title">Purchases</h2>
+                    <form class="search-your-orders-form">
+                        <input type="text" class="form-control" placeholder="Search your orders" />
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </form>
+                </div>
+
+                <div class="purchase-view-options">
+                    <label for="seeOrders">See orders:</label>
+                    <select id="seeOrders" class="form-select form-select-sm">
+                        <option selected>All</option>
+                        <option>Last 60 days</option>
+                    </select>
+                </div>
+
+                <ul class="purchase-filter-nav">
+                    <li><a href="#" class="btn-filter-nav">Unpaid invoices</a></li>
+                    <li><a href="#" class="btn-filter-nav active">Orders</a></li>
+                    <li><a href="#" class="btn-filter-nav">Cancelled items</a></li>
+                    <li><a href="#" class="btn-filter-nav">Cancelled invoices</a></li>
+                    <li><a href="#" class="btn-filter-nav">Returns and cancelled orders</a></li>
+                </ul>
+
+                <div class="order-list">
+                    @if (!Model.Any())
+                    {
+                        <div class="order-card-empty text-center mt-5">
+                            <p class="h5 text-muted">No orders found.</p>
+                        </div>
+                    }
+
+                    @foreach (var item in Model)
+                    {
+                        <div class="order-card">
+                            <div class="order-card-header">
+
+                                @* ===== SỬA ĐỔI 1: HIỂN THỊ ORDER NUMBER ===== *@
+                                <div class="order-info-details">
+                                    <div class="order-info-est">
+                                        <span class="text-uppercase small-text">Order date:</span>
+                                        <span class="fw-bold">@item.OrderDate.ToString("dd-MMM-yyyy")</span>
+                                    </div>
+                                    <div class="order-info-est">
+                                        <span class="text-uppercase small-text">Order number:</span>
+
+                                        @* ===== SỬA ĐỔI: GỌI HÀM HELPER ===== *@
+                                        @* Hàm này sẽ tạo mã ngẫu nhiên nhất quán
+                                          Ví dụ: 101 -> X5T7-G3P1-Q9A2
+                                                 102 -> A9B2-L4K7-P8J1
+                                          (Và sẽ luôn là như vậy)
+                                        *@
+                                        <span class="fw-bold">@FormattingHelper.GenerateDisplayOrderNumber(item.OrderId)</span>
+                                    </div>
+                                </div>
+                                @* ====================================== *@
+
+
+                                @* Thanh trạng thái (giữ nguyên logic cũ) *@
+                                @{
+                                    bool isPaid = item.OrderStatus == "Completed" || item.OrderStatus == "Shipped";
+                                    bool isShipped = item.OrderStatus == "Completed" || item.OrderStatus == "Shipped";
+                                    bool isDelivered = item.OrderStatus == "Completed";
+                                }
+                                <div class="order-status-bar">
+                                    <div class="status-node @(isPaid ? "active" : "")">
+                                        <div class="status-dot"></div>
+                                        <span class="status-label">PAID</span>
+                                    </div>
+                                    <div class="status-line @(isShipped ? "active" : "")"></div>
+                                    <div class="status-node @(isShipped ? "active" : "")">
+                                        <div class="status-dot"></div>
+                                        <span class="status-label">SHIPPED</span>
+                                    </div>
+                                    <div class="status-line @(isDelivered ? "active" : "")"></div>
+                                    <div class="status-node @(isDelivered ? "active" : "")">
+                                        <div class="status-dot"></div>
+                                        <span class="status-label">DELIVERED</span>
+                                    </div>
+                                </div>
+
+                                <div class="order-header-action">
+                                    @* Logic trạng thái Feedback (giữ nguyên) *@
+                                    @switch (item.FeedbackState)
+                                    {
+                                        case "ELIGIBLE":
+                                            <form action="/feedback/FormFeedback" method="get">
+                                                <input type="hidden" name="id" value="@item.OrderId" />
+                                                <button type="submit"
+                                                        class="btn btn-primary btn-leave-feedback-main"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#leaveReviewModal"
+                                                        data-product-id="@item.ProductId"
+                                                        data-product-title="@item.ProductTitle"
+                                                        data-product-image="@item.ProductImage">
+                                                    Leave Feedback
+                                                </button>
+                                            </form>
+                                            break;
+
+                                        case "SUBMITTED":
+                                            <span class="feedback-state-text">Feedback left</span>
+                                            break;
+
+                                        case "EXPIRED":
+                                            <span class="feedback-state-text">Feedback period ended</span>
+                                            break;
+
+                                        case "IN_DISPUTE":
+                                            <span class="feedback-state-text dispute">Action required</span>
+                                            break;
+
+                                        case "PENDING_DELIVERY":
+                                            <span class="feedback-state-text">Order processing</span>
+                                            break;
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="order-card-body">
+                                <div class="order-card-img">
+                                    <img src="@item.ProductImage" alt="@item.ProductTitle" />
+                                </div>
+                                <div class="order-product-info">
+                                    <h3 class="product-title-link"><a href="#">@item.ProductTitle</a></h3>
+                                    <p class="small-text mb-1">Size: (N/A)</p>
+                                    <p class="mb-1">
+                                        <span class="fw-bold">US $@item.UnitPrice?.ToString("#,##0.00")</span>
+                                        <span class="text-muted small-text"> | Free postage</span>
+                                    </p>
+
+                                    @* ===== SỬA ĐỔI 2: HIỂN THỊ ITEM ID ===== *@
+                                    <p class="text-muted small-text mb-2">Item ID: @item.ProductId</p>
+                                    @* ====================================== *@
+
+                                    <a href="#" class="small-text">Add note</a>
+                                </div>
+                                <div class="order-seller-info">
+                                    <p class="small-text mb-1">SELLER:</p>
+
+                                    @* ===== SỬA ĐỔI 3: HIỂN THỊ SELLER NAME ===== *@
+                                    <a href="/feedback/OverviewFeedback?sellerId=@item.SellerId" class="seller-username">@item.SellerUsername</a>
+                                    @* ======================================== *@
+                                </div>
+                                <div class="order-actions">
+                                    <div class="dropdown">
+                                        <button class="btn btn-secondary btn-i-d-like-to dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                            I'd like to...
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li><a class="dropdown-item" href="#">Contact seller</a></li>
+                                            <li><a class="dropdown-item" href="#">Return this item</a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ... (Modal và phần Scripts giữ nguyên) ... *@
+<div class="modal fade" id="leaveReviewModal" tabindex="-1" aria-labelledby="leaveReviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content leave-review-modal-content">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold" id="leaveReviewModalLabel">Leave feedback</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-4">
+                <div class="product-info-section mb-4">
+                    <div class="d-flex align-items-start gap-3">
+                        <img src="" alt="" class="product-thumbnail" id="modalProductImage" />
+                        <div class="product-info-text">
+                            <p class="text-muted small mb-1">You're reviewing:</p>
+                            <h2 class="h6 mb-0 fw-semibold" id="modalProductTitle"></h2>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4" />
+
+                <form id="reviewForm" asp-controller="Purchase" asp-action="LeaveReview" method="post">
+                    <input type="hidden" name="ProductId" id="modalProductId" />
+                    <input type="hidden" name="ProductTitle" id="modalProductTitleHidden" />
+                    <input type="hidden" name="ProductImage" id="modalProductImageHidden" />
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold d-flex align-items-center gap-2">
+                            Rate this item
+                            <span class="text-danger">*</span>
+                        </label>
+                        <span class="text-danger d-block small mb-2" id="ratingError" style="display: none;">Please select a rating</span>
+
+                        <div class="star-rating-container">
+                            <div class="star-rating">
+                                <input type="radio" id="star5" name="Rating" value="5" />
+                                <label for="star5" title="5 stars - Excellent">★</label>
+
+                                <input type="radio" id="star4" name="Rating" value="4" />
+                                <label for="star4" title="4 stars - Good">★</label>
+
+                                <input type="radio" id="star3" name="Rating" value="3" />
+                                <label for="star3" title="3 stars - Average">★</label>
+
+                                <input type="radio" id="star2" name="Rating" value="2" />
+                                <label for="star2" title="2 stars - Poor">★</label>
+
+                                <input type="radio" id="star1" name="Rating" value="1" />
+                                <label for="star1" title="1 star - Terrible">★</label>
+                            </div>
+                            <span class="star-rating-hint small text-muted ms-3" id="starHint">Select rating</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="commentTextarea" class="form-label fw-semibold">
+                            Tell us more about your experience <span class="text-muted small">(Optional)</span>
+                        </label>
+                        <textarea name="Comment"
+                                  class="form-control feedback-textarea"
+                                  rows="5"
+                                  maxlength="500"
+                                  id="commentTextarea"
+                                  placeholder="Share details about your experience with this item..."></textarea>
+                        <div class="d-flex justify-content-between align-items-center mt-1">
+                            <span class="form-text small text-muted">Be specific and honest</span>
+                            <span class="form-text small text-muted" id="charCount">0 / 500</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            Add photos <span class="text-muted small">(Optional)</span>
+                        </label>
+                        <div class="upload-placeholder-container">
+                            <div class="upload-placeholder">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="upload-icon">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                </svg>
+                                <p class="mb-1 fw-semibold">Add up to 5 photos</p>
+                                <p class="small text-muted mb-0">Feature coming soon</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="small text-muted text-center mb-3">
+                        Your review will be visible to other shoppers
+                    </p>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-leave-feedback">
+                            Leave feedback
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('leaveReviewModal');
+
+            if (!modal) {
+                console.error('Modal element not found!');
+                return;
+            }
+
+            const reviewForm = document.getElementById('reviewForm');
+            const textarea = document.getElementById('commentTextarea');
+            const charCount = document.getElementById('charCount');
+            const starInputs = document.querySelectorAll('.star-rating input[type="radio"]');
+            const starHint = document.getElementById('starHint');
+            const starLabels = document.querySelectorAll('.star-rating label');
+            const ratingError = document.getElementById('ratingError');
+
+            // Populate modal with product data when button is clicked
+            modal.addEventListener('show.bs.modal', function(event) {
+                console.log('Modal is opening...');
+
+                const button = event.relatedTarget;
+                const productId = button.getAttribute('data-product-id');
+                const productTitle = button.getAttribute('data-product-title');
+                const productImage = button.getAttribute('data-product-image');
+
+                console.log('Product ID:', productId);
+                console.log('Product Title:', productTitle);
+                console.log('Product Image:', productImage);
+
+                document.getElementById('modalProductId').value = productId;
+                document.getElementById('modalProductTitle').textContent = productTitle;
+                document.getElementById('modalProductTitleHidden').value = productTitle;
+                document.getElementById('modalProductImage').src = productImage;
+                document.getElementById('modalProductImage').alt = productTitle;
+                document.getElementById('modalProductImageHidden').value = productImage;
+
+                // Reset form
+                reviewForm.reset();
+                charCount.textContent = '0 / 500';
+                starHint.textContent = 'Select rating';
+                ratingError.style.display = 'none';
+            });
+
+            // Character counter
+            if (textarea && charCount) {
+                textarea.addEventListener('input', function() {
+                    const count = this.value.length;
+                    charCount.textContent = `${count} / 500`;
+                });
+            }
+
+            // Star rating interaction
+            starInputs.forEach(input => {
+                input.addEventListener('change', function() {
+                    ratingError.style.display = 'none';
+                    if (starHint) {
+                        const ratingText = {
+                            '5': 'Excellent',
+                            '4': 'Good',
+                            '3': 'Average',
+                            '2': 'Poor',
+                            '1': 'Terrible'
+                        };
+                        starHint.textContent = ratingText[this.value] || 'Select rating';
+                    }
+                });
+            });
+
+            // Visual feedback on hover
+            starLabels.forEach((label, index) => {
+                label.addEventListener('mouseenter', function() {
+                    starLabels.forEach((l, i) => {
+                        if (i >= starLabels.length - index - 1) {
+                            l.style.transform = 'scale(1.1)';
+                        }
+                    });
+                });
+
+                label.addEventListener('mouseleave', function() {
+                    starLabels.forEach(l => {
+                        l.style.transform = 'scale(1)';
+                    });
+                });
+            });
+
+            // Form validation
+            reviewForm.addEventListener('submit', function(e) {
+                const ratingSelected = document.querySelector('.star-rating input[type="radio"]:checked');
+                if (!ratingSelected) {
+                    e.preventDefault();
+                    ratingError.style.display = 'block';
+                    ratingError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+
+            // Test modal trigger
+            console.log('Bootstrap version:', typeof bootstrap !== 'undefined' ? bootstrap.Modal.VERSION : 'Not loaded');
+        });
+    </script>
+}

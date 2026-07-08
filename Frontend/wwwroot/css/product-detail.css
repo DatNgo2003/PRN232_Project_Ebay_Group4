@@ -1,0 +1,181 @@
+﻿/* ===============================================
+   PRODUCT DETAIL PAGE
+   =============================================== */
+
+.product-detail-container {
+    background-color: #fff;
+    padding: 2rem;
+    border-radius: 8px;
+    border: 1px solid #e5e5e5;
+}
+
+.product-detail-image {
+    max-width: 100%;
+    border-radius: 8px;
+    border: 1px solid #eee;
+}
+
+.product-detail-title {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #333;
+    line-height: 1.2;
+}
+
+.product-detail-seller {
+    font-size: 0.9rem;
+    color: #555;
+    margin-top: 0.5rem;
+}
+
+    .product-detail-seller a {
+        text-decoration: none;
+    }
+
+.product-detail-quick-rating {
+    margin: 1rem 0;
+    display: flex;
+    align-items: center;
+}
+
+.star-display {
+    color: #f57f17; /* Màu cam của eBay */
+    font-weight: bold;
+}
+
+.star-empty {
+    color: #ccc;
+}
+
+.product-detail-price {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #333;
+    margin: 1rem 0;
+}
+
+/* Các nút Mua hàng */
+.btn-buy-now {
+    background-color: #3498db;
+    color: white;
+    font-weight: 600;
+    padding: 0.8rem 2.5rem;
+    border-radius: 25px;
+    border: none;
+    margin-right: 1rem;
+    width: 100%;
+    max-width: 250px;
+}
+
+    .btn-buy-now:hover {
+        background-color: #2980b9;
+        color: white;
+    }
+
+.btn-add-cart, .btn-watch-list {
+    background-color: white;
+    color: #3498db;
+    font-weight: 600;
+    padding: 0.8rem 1.5rem;
+    border-radius: 25px;
+    border: 1px solid #3498db;
+    margin-top: 0.5rem;
+    width: 100%;
+    max-width: 250px;
+}
+
+    .btn-add-cart:hover, .btn-watch-list:hover {
+        background-color: #f8f8f8;
+        color: #2980b9;
+        border-color: #2980b9;
+    }
+
+
+/* Khu vực Rating */
+#ratings-reviews h2 {
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+}
+
+.rating-summary {
+    text-align: center;
+    padding: 1rem;
+}
+
+.rating-score {
+    font-size: 4rem;
+    font-weight: 700;
+    color: #333;
+    line-height: 1;
+}
+
+.star-display-large {
+    font-size: 1.5rem;
+    color: #f57f17;
+    margin: 0.5rem 0;
+}
+
+/* Biểu đồ sao */
+.rating-bars {
+    margin-top: 1.5rem;
+}
+
+.rating-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.rating-bar-label {
+    flex-basis: 70px;
+    font-size: 0.9rem;
+    color: #555;
+    text-align: right;
+}
+
+.progress {
+    flex: 1;
+    height: 10px;
+}
+
+.progress-bar {
+    background-color: #f57f17;
+}
+
+.rating-bar-count {
+    flex-basis: 40px;
+    font-size: 0.9rem;
+    color: #555;
+    text-align: left;
+}
+
+/* Danh sách Review */
+.review-card {
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    background-color: #fff;
+}
+
+.review-header .star-display {
+    font-size: 1.1rem;
+}
+
+.review-comment {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333;
+    margin: 0.75rem 0;
+}
+
+.review-footer {
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.review-verified {
+    color: #777;
+    font-weight: 500;
+}

@@ -1,0 +1,80 @@
+﻿using Backend.DTOs.Responses;
+using Backend.Models;
+using Backend.Repositories;
+using Microsoft.EntityFrameworkCore; // Cần cho .AnyAsync()
+
+namespace Backend.Services
+{
+    public class OrderService : IOrderService
+    {
+        private readonly IOrderRepository _orderRepository;
+        private readonly IProductRepository _productRepository;
+        private readonly UserRepository _userRepository;
+        private readonly CloneEbayDbContext _context; // Dùng để kiểm tra Review
+
+        public OrderService(
+            IOrderRepository orderRepository,
+            IProductRepository productRepository,
+            UserRepository userRepository,
+            CloneEbayDbContext context) // Inject DbContext
+        {
+            _orderRepository = orderRepository;
+            _productRepository = productRepository;
+            _userRepository = userRepository;
+            _context = context;
+        }
+
+        private async Task<User?> GetUserFromUsername(string username)
+        {
+            // Dùng GetByUsernameAsync thay vì GetByUsernameOrEmailAsync để đảm bảo
+            return await _userRepository.GetByUsernameAsync(username);
+        }
+
+        public async Task<bool> CreateQuickBuyOrderAsync(string buyerUsername, int productId)
+        {
+            var user = await GetUserFromUsername(buyerUsername);
+            if (user == null) return false; // Không tìm thấy user
+
+            var product = await _productRepository.GetProductByIdAsync(productId);
+            if (product == null || product.Price == null) return false; // Không tìm thấy sản phẩm hoặc giá
+
+            await _orderRepository.CreateSimpleOrderAsync(user.Id, productId, product.Price.Value);
+            return true;
+        }
+
+        public async Task<IEnumerable<PurchaseHistoryItemDto>> GetPurchaseHistoryAsync(string buyerUsername)
+        {
+            var user = await GetUserFromUsername(buyerUsername);
+            if (user == null)
+            {
+                return new List<PurchaseHistoryItemDto>(); // Trả về danh sách rỗng
+            }
+
+            var orderItems = await _orderRepository.GetPurchaseHistoryAsync(user.Id);
+
+            var dtos = new List<PurchaseHistoryItemDto>();
+
+            foreach (var item in orderItems)
+            {
+                if (item.Product == null || item.Order == null) continue;
+
+                // Kiểm tra xem đã review sản phẩm này chưa
+                bool hasReviewed = await _context.Reviews
+                    .AnyAsync(r => r.ProductId == item.ProductId && r.ReviewerId == user.Id);
+
+                dtos.Add(new PurchaseHistoryItemDto
+                {
+                    OrderItemId = item.Id,
+                    ProductId = item.Product.Id,
+                    ProductTitle = item.Product.Title,
+                    ProductImage = item.Product.Images,
+                    UnitPrice = item.UnitPrice,
+                    OrderDate = item.Order.OrderDate ?? DateTime.MinValue,
+                    HasReviewed = hasReviewed
+                });
+            }
+
+            return dtos;
+        }
+    }
+}

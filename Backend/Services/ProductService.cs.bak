@@ -1,0 +1,86 @@
+using Backend.DTOs.Responses; // Thêm
+using Backend.Models;
+using Backend.Repositories;
+using System.Linq; // Thêm
+
+namespace Backend.Services
+{
+    public class ProductService : IProductService
+    {
+        private readonly IProductRepository _productRepository;
+
+        public ProductService(IProductRepository productRepository)
+        {
+            _productRepository = productRepository;
+        }
+
+        public async Task<IEnumerable<Product>> GetProductsAsync()
+        {
+            return await _productRepository.GetProductsAsync();
+        }
+
+        // Phương thức mới từ Giai đoạn 4
+        public async Task<ProductDetailDto?> GetProductDetailAsync(int id)
+        {
+            var product = await _productRepository.GetProductByIdAsync(id);
+
+            if (product == null)
+            {
+                return null;
+            }
+
+            // Map Entity sang DTO
+            var dto = new ProductDetailDto
+            {
+                Id = product.Id,
+                Title = product.Title,
+                Description = product.Description,
+                Price = product.Price,
+                Images = product.Images,
+                CategoryName = product.Category?.Name,
+                SellerName = product.Seller?.Username
+            };
+
+            var reviews = product.Reviews.ToList();
+            dto.ReviewCount = reviews.Count;
+
+            if (dto.ReviewCount > 0)
+            {
+                // 1. Tính rating trung bình
+                dto.AverageRating = reviews.Average(r => r.Rating ?? 0);
+
+                // 2. Map danh sách review
+                dto.Reviews = reviews.Select(r => new ReviewDto
+                {
+                    Rating = r.Rating ?? 0,
+                    Comment = r.Comment,
+                    // Đảm bảo Reviewer không null (từ Include trong Repo)
+                    ReviewerUsername = r.Reviewer?.Username ?? "Anonymous",
+                    CreatedAt = r.CreatedAt ?? DateTime.MinValue
+                })
+                .OrderByDescending(r => r.CreatedAt)
+                .ToList();
+
+                // 3. Tính biểu đồ Rating (RatingCounts)
+                dto.RatingCounts = reviews
+                    .GroupBy(r => r.Rating ?? 0)
+                    .ToDictionary(g => g.Key, g => g.Count());
+            }
+            else
+            {
+                dto.AverageRating = 0;
+            }
+
+            // Đảm bảo Dictionary luôn có đủ 5 khóa (1-5) cho UI
+            for (int i = 1; i <= 5; i++)
+            {
+                if (!dto.RatingCounts.ContainsKey(i))
+                {
+                    dto.RatingCounts.Add(i, 0);
+                }
+            }
+
+            return dto;
+        }
+    }
+}

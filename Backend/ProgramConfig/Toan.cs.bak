@@ -1,0 +1,39 @@
+﻿using Backend.Models;
+using Backend.Repositories;
+using Backend.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace Backend.ProgramConfig
+{
+    public static class Toan
+    {
+        public static IServiceCollection AddMyServices1(this IServiceCollection services, IConfiguration configuration)
+        {
+            // Add DbContext using SQL Server Provider
+            services.AddDbContext<CloneEbayDbContext>(options =>
+                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"),
+                sqlServerOptionsAction: sqlOptions =>
+                {
+                    sqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 5,
+                        maxRetryDelay: TimeSpan.FromSeconds(30),
+                        errorNumbersToAdd: null);
+                }));
+
+            // Register Product related services
+            services.AddScoped<IProductRepository, ProductRepository>();
+            services.AddScoped<IProductService, ProductService>();
+
+            // Register Order related services (Giai đoạn 5)
+            services.AddScoped<IOrderRepository, OrderRepository>();
+            services.AddScoped<IOrderService, OrderService>();
+
+            // === THÊM DỊCH VỤ MỚI CHO GIAI ĐOẠN 6 ===
+            services.AddScoped<IReviewRepository, ReviewRepository>();
+            services.AddScoped<IReviewService, ReviewService>();
+            // === KẾT THÚC THÊM ===
+
+            return services;
+        }
+    }
+}

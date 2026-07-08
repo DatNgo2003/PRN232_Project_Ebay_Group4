@@ -1,0 +1,342 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-m">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gửi Khiếu Nại</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        /* Ẩn các bước không hoạt động */
+        .step-content {
+            display: none;
+        }
+        /* Hiển thị bước hiện tại */
+        .step-content.active {
+            display: block;
+        }
+
+        /* Tùy chỉnh danh sách chọn sản phẩm */
+        .item-list .list-group-item {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .item-list .list-group-item:hover {
+            background-color: #f1f1f1;
+        }
+        .item-list .list-group-item.selected {
+            background-color: #e0efff;
+            border-color: #0d6efd;
+        }
+        .item-details img {
+            max-width: 80px;
+            height: auto;
+            margin-right: 15px;
+        }
+
+        /* Ẩn các tùy chọn chi tiết (cho JS) */
+        .reason-details {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white py-3">
+                        <h2 class="h4 mb-0">Mở Khiếu Nại Mới</h2>
+                        <p class="text-muted mb-0">Chúng tôi sẽ giúp bạn giải quyết vấn đề với đơn hàng.</p>
+                    </div>
+                    <div class="card-body p-4 p-md-5">
+
+                        <div class="progress mb-4" style="height: 20px;">
+                            <div id="progressBar" class="progress-bar" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">Bước 1/4</div>
+                        </div>
+
+                        <form id="disputeForm">
+
+                            <div id="step-1" class="step-content active">
+                                <h5 class="mb-3">Bước 1: Chọn đơn hàng bạn muốn khiếu nại</h5>
+                                <p class="text-muted">Chỉ các đơn hàng đã giao hoặc quá hạn giao dự kiến mới được hiển thị.</p>
+                                <div class="item-list">
+                                    <div class="list-group">
+                                        <a href="#" class="list-group-item list-group-item-action" data-item-id="123456" data-item-name="iPhone 14 Pro Max 256GB" data-seller-name="SellerStoreName">
+                                            <div class="d-flex w-100 item-details">
+                                                <img src="https://via.placeholder.com/100" class="rounded" alt="Sản phẩm">
+                                                <div class="flex-grow-1">
+                                                    <h6 class="mb-1">iPhone 14 Pro Max 256GB</h6>
+                                                    <p class="mb-1 text-muted">
+                                                        Đơn hàng: #123456 | Người bán: SellerStoreName
+                                                    </p>
+                                                    <small>Đã giao ngày: 01/11/2025</small>
+                                                </div>
+                                            </div>
+                                        </a>
+                                        <a href="#" class="list-group-item list-group-item-action" data-item-id="789001" data-item-name="Bộ Lego Star Wars" data-seller-name="Eva Home">
+                                            <div class="d-flex w-100 item-details">
+                                                <img src="https://via.placeholder.com/100" class="rounded" alt="Sản phẩm">
+                                                <div class="flex-grow-1">
+                                                    <h6 class="mb-1">Bộ Lego Star Wars</h6>
+                                                    <p class="mb-1 text-muted">
+                                                        Đơn hàng: #789001 | Người bán: Eva Home
+                                                    </p>
+                                                    <small>Đã giao ngày: 30/10/2025</small>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="text-end mt-4">
+                                    <button type="button" class="btn btn-primary btn-lg" id="btn-step-1" disabled>Tiếp theo <i class="bi bi-arrow-right"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="step-2" class="step-content">
+                                <h5 class="mb-3">Bước 2: Lý do bạn khiếu nại là gì?</h5>
+                                <p class="text-muted">Bạn đang khiếu nại cho đơn hàng: <strong id="selectedItemName"></strong></p>
+
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="reason" id="reason-not-received" value="not-received">
+                                    <label class="form-check-label h6 ms-2" for="reason-not-received">
+                                        Tôi không nhận được hàng
+                                    </label>
+                                    <p class="text-muted ms-4 mb-0">Chọn nếu đơn hàng đã quá ngày giao dự kiến nhưng bạn vẫn chưa nhận được.</p>
+                                </div>
+
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="reason" id="reason-not-as-described" value="not-described">
+                                    <label class="form-check-label h6 ms-2" for="reason-not-as-described">
+                                        Sản phẩm không đúng như mô tả
+                                    </label>
+                                    <p class="text-muted ms-4 mb-0">Chọn nếu sản phẩm bị hỏng, khác biệt, hoặc thiếu phụ kiện.</p>
+                                </div>
+
+                                <div class="d-flex justify-content-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary" data-step="1"><i class="bi bi-arrow-left"></i> Quay lại</button>
+                                    <button type="button" class="btn btn-primary btn-lg" id="btn-step-2" disabled>Tiếp theo <i class="bi bi-arrow-right"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="step-3" class="step-content">
+                                <h5 class="mb-3">Bước 3: Cung cấp thêm chi tiết</h5>
+
+                                <div id="details-not-received" class="reason-details">
+                                    <div class="alert alert-warning">
+                                        Trạng thái vận đơn: Đã giao thành công. <br>
+                                        Vui lòng kiểm tra lại với người thân hoặc hàng xóm. Nếu bạn chắc chắn chưa nhận được, hãy tiếp tục.
+                                    </div>
+                                </div>
+
+                                <div id="details-not-described" class="reason-details">
+                                    <div class="mb-3">
+                                        <label for="reason-details-select" class="form-label">Vui lòng mô tả rõ hơn:</label>
+                                        <select class="form-select" id="reason-details-select">
+                                            <option value="">Chọn một lý do...</option>
+                                            <option value="damaged">Sản phẩm bị hỏng, vỡ</option>
+                                            <option value="wrong-item">Gửi sai sản phẩm</option>
+                                            <option value="missing-parts">Sản phẩm thiếu bộ phận/phụ kiện</option>
+                                            <option value="fake">Hàng giả</option>
+                                            <option value="different">Không giống ảnh/mô tả</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="dispute-photos" class="form-label">Tải lên hình ảnh bằng chứng (nếu có):</label>
+                                        <input class="form-control" type="file" id="dispute-photos" multiple>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="dispute-comment" class="form-label">Nội dung khiếu nại:</label>
+                                    <textarea class="form-control" id="dispute-comment" rows="5" placeholder="Mô tả chi tiết vấn đề của bạn để người bán có thể hỗ trợ... (VD: Sản phẩm vỡ ở góc, thiếu dây sạc...)"></textarea>
+                                </div>
+
+                                <div class="d-flex justify-content-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary" data-step="2"><i class="bi bi-arrow-left"></i> Quay lại</button>
+                                    <button type="button" class="btn btn-primary btn-lg" id="btn-step-3">Tiếp theo <i class="bi bi-arrow-right"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="step-4" class="step-content">
+                                <h5 class="mb-3">Bước 4: Bạn mong muốn giải pháp gì?</h5>
+
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="resolution" id="resolution-refund" value="refund">
+                                    <label class="form-check-label h6 ms-2" for="resolution-refund">
+                                        Hoàn tiền 100%
+                                    </label>
+                                    <p class="text-muted ms-4 mb-0">Bạn sẽ cần gửi trả lại hàng cho người bán (nếu đã nhận).</p>
+                                </div>
+
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="resolution" id="resolution-partial" value="partial-refund">
+                                    <label class="form-check-label h6 ms-2" for="resolution-partial">
+                                        Hoàn tiền một phần
+                                    </label>
+                                    <p class="text-muted ms-4 mb-0">Giữ lại hàng và yêu cầu hoàn một phần tiền (ví dụ: hàng bị xước nhẹ).</p>
+                                </div>
+
+                                <div class="form-check mb-3 p-3 border rounded">
+                                    <input class="form-check-input" type="radio" name="resolution" id="resolution-replace" value="replace">
+                                    <label class="form-check-label h6 ms-2" for="resolution-replace">
+                                        Gửi hàng thay thế
+                                    </label>
+                                    <p class="text-muted ms-4 mb-0">Người bán sẽ gửi cho bạn một sản phẩm mới.</p>
+                                </div>
+
+                                <div class="d-flex justify-content-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary" data-step="3"><i class="bi bi-arrow-left"></i> Quay lại</button>
+                                    <button type="button" class="btn btn-primary btn-lg" id="btn-submit-dispute">Gửi Khiếu nại</button>
+                                </div>
+                            </div>
+
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="confirmModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Xác nhận gửi khiếu nại</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Khiếu nại của bạn sẽ được gửi đến người bán. Người bán có 3 ngày làm việc để phản hồi.</p>
+                    <p>Nếu người bán không phản hồi, bạn có thể yêu cầu Admin can thiệp.</p>
+                    <p><strong>Bạn có chắc chắn muốn gửi?</strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" id="btn-final-submit">Đồng ý gửi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            let currentStep = 1;
+            const totalSteps = 4;
+            const disputeData = {}; // Đối tượng lưu trữ dữ liệu
+            const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+            // === HÀM CHUYỂN BƯỚC ===
+            function goToStep(step) {
+                document.getElementById(`step-${currentStep}`).classList.remove('active');
+                document.getElementById(`step-${step}`).classList.add('active');
+                currentStep = step;
+                updateProgressBar();
+            }
+
+            // === HÀM CẬP NHẬT PROGRESS BAR ===
+            function updateProgressBar() {
+                const percentage = (currentStep / totalSteps) * 100;
+                const progressBar = document.getElementById('progressBar');
+                progressBar.style.width = percentage + '%';
+                progressBar.innerText = `Bước ${currentStep}/${totalSteps}`;
+            }
+
+            // === BƯỚC 1: CHỌN SẢN PHẨM ===
+            const items = document.querySelectorAll('.item-list .list-group-item');
+            const btnStep1 = document.getElementById('btn-step-1');
+
+            items.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    // Bỏ chọn tất cả
+                    items.forEach(i => i.classList.remove('selected'));
+                    // Chọn cái này
+                    this.classList.add('selected');
+                    // Kích hoạt nút
+                    btnStep1.disabled = false;
+
+                    // Lưu dữ liệu
+                    disputeData.itemId = this.dataset.itemId;
+                    disputeData.itemName = this.dataset.itemName;
+                    document.getElementById('selectedItemName').innerText = disputeData.itemName;
+                });
+            });
+
+            btnStep1.addEventListener('click', () => goToStep(2));
+
+            // === BƯỚC 2: CHỌN LÝ DO ===
+            const btnStep2 = document.getElementById('btn-step-2');
+            const reasonRadios = document.querySelectorAll('input[name="reason"]');
+
+            reasonRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    btnStep2.disabled = false;
+                    disputeData.reason = this.value;
+
+                    // Hiển thị các chi tiết tương ứng ở bước 3
+                    document.getElementById('details-not-received').style.display = 'none';
+                    document.getElementById('details-not-described').style.display = 'none';
+
+                    if (this.value === 'not-received') {
+                        document.getElementById('details-not-received').style.display = 'block';
+                    } else if (this.value === 'not-described') {
+                        document.getElementById('details-not-described').style.display = 'block';
+                    }
+                });
+            });
+
+            btnStep2.addEventListener('click', () => goToStep(3));
+
+            // === BƯỚC 3: CHI TIẾT ===
+            document.getElementById('btn-step-3').addEventListener('click', () => {
+                // (Bạn nên thêm logic kiểm tra (validation) ở đây)
+                disputeData.comment = document.getElementById('dispute-comment').value;
+                goToStep(4);
+            });
+
+            // === BƯỚC 4: GỬI KHIẾU NẠI ===
+            document.getElementById('btn-submit-dispute').addEventListener('click', () => {
+                // (Bạn nên thêm logic kiểm tra (validation) ở đây)
+                disputeData.resolution = document.querySelector('input[name="resolution"]:checked')?.value;
+
+                // Hiển thị modal xác nhận
+                modal.show();
+            });
+
+            // === XỬ LÝ QUAY LẠI ===
+            document.querySelectorAll('button[data-step]').forEach(button => {
+                button.addEventListener('click', function() {
+                    goToStep(parseInt(this.dataset.step));
+                });
+            });
+
+            // === XỬ LÝ GỬI CUỐI CÙNG (TRONG MODAL) ===
+            document.getElementById('btn-final-submit').addEventListener('click', function() {
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang gửi...';
+
+                // In dữ liệu ra console (để mô phỏng)
+                console.log("Dữ liệu khiếu nại:", disputeData);
+
+                // Mô phỏng gọi API
+                setTimeout(() => {
+                    modal.hide();
+                    // Chuyển hướng đến trang quản lý khiếu nại (hoặc hiển thị thông báo thành công)
+                    alert('Gửi khiếu nại thành công! Đang chuyển đến Trung tâm Giải quyết...');
+                    // window.location.href = '/disputes.html'; // Bỏ comment dòng này để chuyển trang
+                }, 2000);
+            });
+
+        });
+    </script>
+
+</body>
+</html>

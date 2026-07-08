@@ -1,0 +1,62 @@
+﻿@model LeaveReviewViewModel
+@{
+    ViewData["Title"] = "Leave Review";
+}
+
+<div class="container leave-review-container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card p-4">
+                <h1 class="h3">Leave review</h1>
+
+                <div class="product-info-header">
+                    <img src="@Model.ProductImage" alt="@Model.ProductTitle" />
+                    <div class="product-info-text">
+                        <span>Product:</span>
+                        <strong>@Model.ProductTitle</strong>
+                    </div>
+                </div>
+
+                <hr />
+
+                <form asp-action="LeaveReview" method="post">
+                    <input type="hidden" asp-for="ProductId" />
+                    <input type="hidden" asp-for="ProductTitle" />
+                    <input type="hidden" asp-for="ProductImage" />
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">How was your experience?</label>
+                        <div class="experience-buttons">
+                            <button type="button" class="btn btn-outline-success">😊 Positive</button>
+                            <button type="button" class="btn btn-outline-secondary">😐 Neutral</button>
+                            <button type="button" class="btn btn-outline-danger">😞 Negative</button>
+                        </div>
+                    </div>
+
+                    <div class_="mb-3">
+                        <label class="form-label fw-bold">How would you rate this item? <span class="text-danger">*</span></label>
+                        <span asp-validation-for="Rating" class="text-danger d-block"></span>
+
+                        <div class="star-rating">
+                            <input type="radio" id="star5" asp-for="Rating" value="5" /><label for="star5" title="5 stars">★</label>
+                            <input type="radio" id="star4" asp-for="Rating" value="4" /><label for="star4" title="4 stars">★</label>
+                            <input type="radio" id="star3" asp-for="Rating" value="3" /><label for="star3" title="3 stars">★</label>
+                            <input type="radio" id="star2" asp-for="Rating" value="2" /><label for="star2" title="2 stars">★</label>
+                            <input type="radio" id="star1" asp-for="Rating" value="1" /><label for="star1" title="1 star">★</label>
+                        </div>
+                    </div>
+
+                    <div class_="mb-3">
+                        <label asp-for="Comment" class="form-label fw-bold">Tell us more about this item (Optional)</label>
+                        <textarea asp-for="Comment" class="form-control" rows="5" maxlength="500"></textarea>
+                        <div class="form-text text-end">0/500</div>
+                    </div>
+
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <button type"submit" class="btn btn-primary btn-leave-feedback-submit">Leave feedback</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,398 @@
+@inject IHttpContextAccessor HttpContextAccessor
+@{
+    var username = HttpContextAccessor.HttpContext.Session.GetString("Username"); // Giả sử bạn lưu Username trong Session
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - eBay Clone</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+    <style>
+        /* CSS cho Header và Footer */
+        :root {
+            --gh-nav-height: 32px;
+            --main-header-height: 60px;
+            --header-total-height: calc(var(--gh-nav-height) + var(--main-header-height));
+        }
+
+        body {
+            background-color: #f7f7f7;
+        }
+
+        /* Fixed Header */
+        .header-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: white;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        /* Top Bar */
+        .gh-nav {
+            align-items: center;
+            display: flex;
+            gap: 1rem;
+            height: var(--gh-nav-height);
+            justify-content: space-between;
+            padding: 0 1rem;
+            background-color: #f7f7f7;
+            border-bottom: 1px solid #e5e5e5;
+            font-size: 12px;
+            color: #555;
+        }
+
+            .gh-nav a {
+                color: #555;
+                text-decoration: none;
+            }
+
+                .gh-nav a:hover {
+                    text-decoration: underline;
+                }
+
+        .gh-nav-left {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .gh-nav-right {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        /* Main Header */
+        .main-header {
+            background-color: white;
+            height: var(--main-header-height);
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+        }
+
+        /* Search Form */
+        .search-container {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            gap: 1rem;
+        }
+
+        .ebay-logo {
+            margin-right: 1rem;
+        }
+
+        .category-btn {
+            white-space: nowrap;
+            padding: 0.5rem 1rem;
+            border: none;
+            background: none;
+            color: #555;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        /* === CSS THANH SEARCH ĐÃ ĐƯỢC SỬA === */
+        .search-form {
+            display: flex;
+            /* Bỏ border và radius ở form */
+            flex: 1;
+            min-width: 200px;
+            gap: 0.5rem; /* Thêm gap để tách rời */
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 0.5rem 1rem;
+            border: 2px solid #777; /* Thêm border cho input */
+            border-radius: 20px; /* Bo góc input */
+            min-width: 0;
+            font-size: 14px;
+        }
+
+            .search-input:focus {
+                outline: none;
+                border-color: #3665f3;
+            }
+
+        .search-button {
+            background-color: #3665f3;
+            color: white;
+            border: none;
+            padding: 0.5rem 2rem;
+            border-radius: 20px; /* Bo góc button */
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        /* === KẾT THÚC SỬA CSS THANH SEARCH === */
+
+        .advanced-link {
+            color: #555;
+            text-decoration: none;
+            font-size: 12px;
+            white-space: nowrap;
+            margin-left: 0.5rem;
+        }
+
+        /* Navigation Dropdowns */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: white;
+            min-width: 220px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            z-index: 1;
+            border-radius: 4px;
+            padding: 0.5rem 0;
+            right: 0;
+            border: 1px solid #e5e5e5;
+            margin-top: 8px; /* Khoảng cách với top nav */
+        }
+
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        .dropdown-item {
+            display: block;
+            padding: 0.5rem 1rem;
+            color: #333;
+            text-decoration: none;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+            .dropdown-item:hover {
+                background-color: #f8f8f8;
+                text-decoration: none;
+            }
+
+        /* Main Content Padding */
+        .main-content {
+            /* Đẩy nội dung xuống dưới header cố định */
+            padding-top: var(--header-total-height);
+        }
+
+        /* Footer */
+        .footer {
+            background-color: #f7f7f7;
+            padding: 40px 0;
+            margin-top: 50px;
+            border-top: 1px solid #e5e5e5;
+        }
+
+            /* CSS cho 5 cột Footer nằm ngang */
+            .footer .row {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: space-between;
+            }
+
+        .footer-column {
+            flex-basis: 18%; /* 100% / 5 cột = 20%, trừ đi 1 chút cho an toàn */
+            margin-bottom: 20px;
+            min-width: 150px; /* Đảm bảo không quá hẹp */
+        }
+
+            .footer-column h4 {
+                font-size: 14px;
+                font-weight: bold;
+                margin-bottom: 15px;
+                color: #333;
+            }
+
+            .footer-column ul {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+
+                .footer-column ul li {
+                    margin-bottom: 8px;
+                }
+
+                    .footer-column ul li a {
+                        color: #555;
+                        text-decoration: none;
+                        font-size: 12px;
+                    }
+
+                        .footer-column ul li a:hover {
+                            text-decoration: underline;
+                        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <!-- Top Nav -->
+        <nav class="gh-nav">
+            <div class="gh-nav-left">
+                @if (!string.IsNullOrEmpty(username))
+                {
+                    <span>Hi, <a href="#" class="fw-bold">@username</a>!</span>
+                }
+                else
+                {
+                    <span>Hi, <a asp-controller="Auth" asp-action="Login">Sign in</a>!</span>
+                }
+                <a href="#">Daily Deals</a>
+                <a href="#">Brand Outlet</a>
+                <a href="#">Gift Cards</a>
+                <a href="#">Help & Contact</a>
+            </div>
+            <div class="gh-nav-right">
+                <img src="https://placehold.co/24x16?text=VN" alt="VN Flag" />
+                <span>Ship to</span>
+                <a href="#">Sell</a>
+
+                <div class="dropdown">
+                    <span>Watchlist</span>
+                    <div class="dropdown-content">
+                        <span class="dropdown-item">No items in watchlist</span>
+                    </div>
+                </div>
+
+                <div class="dropdown">
+                    <span>My eBay</span>
+                    <div class="dropdown-content">
+                        <a href="#" class="dropdown-item">Summary</a>
+                        <a href="#" class="dropdown-item">Recently Viewed</a>
+                        <a href="#" class="dropdown-item">Bids/Offers</a>
+                        <a href="#" class="dropdown-item">Watchlist</a>
+                        <a asp-controller="Purchase" asp-action="Index" class="dropdown-item">Purchase History</a>
+                        <a href="#" class="dropdown-item">Buy Again</a>
+                        <a href="#" class="dropdown-item">Selling</a>
+                        <a href="#" class="dropdown-item">Saved Searches</a>
+                        <a href="#" class="dropdown-item">Saved Sellers</a>
+                        <a href="#" class="dropdown-item">My Garage</a>
+                        <a href="#" class="dropdown-item">Sizes</a>
+                        <a href="#" class="dropdown-item">My Collection</a>
+                        <a href="#" class="dropdown-item">Messages</a>
+                        <a href="#" class="dropdown-item">PSA Vault</a>
+                    </div>
+                </div>
+
+                <a href="#">🔔</a>
+                <a href="#">🛒</a>
+            </div>
+        </nav>
+
+        <!-- Main Header -->
+        <header class="main-header">
+            <div class="search-container">
+                <a href="/" class="ebay-logo">
+                    <img src="https://placehold.co/100x60?text=eBAY" alt="eBay Logo" />
+                </a>
+
+                <button type="button" class="category-btn">
+                    Shop by category
+                </button>
+
+                <!-- HTML THANH SEARCH (giữ nguyên) -->
+                <form class="search-form">
+                    <input type="text" class="search-input" placeholder="Search for anything" />
+                    <button type="submit" class="search-button">Search</button>
+                </form>
+
+                <a href="#" class="advanced-link">Advanced</a>
+            </div>
+        </header>
+    </div>
+
+    <!-- === BODY CONTAINER ĐÃ ĐƯỢC SỬA === -->
+    <!-- Đã đổi từ container-fluid thành container để tạo lề -->
+    <div class="container main-content">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <!-- Sửa dụng container để căn lề footer giống body -->
+        <div class="container">
+            <div class="row">
+                <!-- 5 Cột này sẽ tự động dàn hàng ngang nhờ CSS ở trên -->
+                <div class="col footer-column">
+                    <h4>Buy</h4>
+                    <ul>
+                        <li><a href="#">Registration</a></li>
+                        <li><a href="#">Money Back Guarantee</a></li>
+                        <li><a href="#">Bidding & buying help</a></li>
+                        <li><a href="#">Stores</a></li>
+                        <li><a href="#">eBay for Charity</a></li>
+                        <li><a href="#">Charity Shop</a></li>
+                        <li><a href="#">Seasonal Sales</a></li>
+                    </ul>
+                </div>
+
+                <div class="col footer-column">
+                    <h4>Sell</h4>
+                    <ul>
+                        <li><a href="#">Start selling</a></li>
+                        <li><a href="#">Learn to sell</a></li>
+                        <li><a href="#">Business sellers</a></li>
+                        <li><a href="#">Affiliates</a></li>
+                    </ul>
+                </div>
+
+                <div class="col footer-column">
+                    <h4>Tools & Apps</h4>
+                    <ul>
+                        <li><a href="#">Developers</a></li>
+                        <li><a href="#">Security center</a></li>
+                        <li><a href="#">Site map</a></li>
+                        <li><a href="#">Seller center</a></li>
+                    </ul>
+                </div>
+
+                <div class="col footer-column">
+                    <h4>Stay Connected</h4>
+                    <ul>
+                        <li><a href="#">Facebook</a></li>
+                        <li><a href="#">Twitter</a></li>
+                        <li><a href="#">Instagram</a></li>
+                        <li><a href="#">eBay's Blogs</a></li>
+                    </ul>
+                </div>
+
+                <div class="col footer-column">
+                    <h4>About eBay</h4>
+                    <ul>
+                        <li><a href="#">Company info</a></li>
+                        <li><a href="#">News</a></li>
+                        <li><a href="#">Investors</a></li>
+                        <li><a href="#">Careers</a></li>
+                        <li><a href="#">Government relations</a></li>
+                        <li><a href="#">Advertise with us</a></li>
+                        <li><a href="#">Policies</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

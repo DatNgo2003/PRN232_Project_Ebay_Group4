@@ -1,0 +1,144 @@
+﻿using Backend.DTOs.Responses;
+using Frontend.Helpers;
+using Frontend.Models; // Thêm
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+
+namespace Frontend.Controllers
+{
+    public class PurchaseController : Controller
+    {
+        private readonly ApiClientHelper _apiClient;
+        private readonly ILogger<PurchaseController> _logger;
+
+        public PurchaseController(ApiClientHelper apiClient, ILogger<PurchaseController> logger)
+        {
+            _apiClient = apiClient;
+            _logger = logger;
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> Index()
+        {
+            try
+            {
+                var response = await _apiClient.GetAsync("order/my-history");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var history = JsonSerializer.Deserialize<List<PurchaseHistoryItemDto>>(content, options);
+
+                    return View(history ?? new List<PurchaseHistoryItemDto>());
+                }
+
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    return RedirectToAction("Login", "Auth");
+                }
+
+                _logger.LogError($"Lỗi API khi gọi order/my-history: {response.ReasonPhrase}");
+                return View(new List<PurchaseHistoryItemDto>());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi nghiêm trọng khi lấy Purchase History");
+                return View("Error");
+            }
+        }
+
+        // === THÊM ACTION MỚI (GET) CHO GIAI ĐOẠN 6 ===
+        [HttpGet]
+        public async Task<IActionResult> LeaveReview(int id) // id là ProductId
+        {
+            try
+            {
+                // Gọi API chi tiết sản phẩm để lấy Tên và Hình ảnh
+                var response = await _apiClient.GetAsync($"products/{id}");
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                        return RedirectToAction("Login", "Auth");
+
+                    return View("NotFound");
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var productDetail = JsonSerializer.Deserialize<ProductDetailDto>(content, options);
+
+                if (productDetail == null)
+                {
+                    return View("NotFound");
+                }
+
+                // Chuẩn bị ViewModel cho trang Review
+                var viewModel = new LeaveReviewViewModel
+                {
+                    ProductId = productDetail.Id,
+                    ProductTitle = productDetail.Title,
+                    ProductImage = productDetail.Images
+                };
+
+                return View(viewModel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Lỗi khi tải trang LeaveReview cho ProductId: {id}");
+                return View("Error");
+            }
+        }
+
+        // === THÊM ACTION MỚI (POST) CHO GIAI ĐOẠN 6 ===
+        [HttpPost]
+        public async Task<IActionResult> LeaveReview(LeaveReviewViewModel model)
+        {
+            // 1. Kiểm tra validation (chủ yếu là check Rating [Required])
+            if (!ModelState.IsValid)
+            {
+                // Nếu không hợp lệ, trả lại View với model (sẽ hiển thị lỗi validation)
+                return View(model);
+            }
+
+            try
+            {
+                // 2. Map ViewModel sang DTO để gửi API
+                var dto = new Backend.DTOs.Requests.CreateReviewDto
+                {
+                    ProductId = model.ProductId,
+                    Rating = model.Rating,
+                    Comment = model.Comment
+                };
+
+                // 3. Gửi review (đã bao gồm token)
+                var response = await _apiClient.PostAsync("review", dto);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    // 4. Thành công, quay về Lịch sử mua hàng
+                    return RedirectToAction("Index");
+                }
+
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    return RedirectToAction("Login", "Auth");
+                }
+
+                // 5. Xử lý lỗi (ví dụ: đã review rồi)
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning($"Lỗi API khi gửi review: {errorContent}");
+                // Thêm lỗi vào ModelState để hiển thị cho người dùng
+                ModelState.AddModelError(string.Empty, "Failed to submit review. You may have already reviewed this item.");
+
+                return View(model);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi nghiêm trọng khi gửi LeaveReview");
+                ModelState.AddModelError(string.Empty, "An unexpected error occurred.");
+                return View(model);
+            }
+        }
+    }
+}

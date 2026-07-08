@@ -1,0 +1,204 @@
+﻿@model List<Frontend.Models.SellerSalesOrderDto>
+@section Styles {
+            // Tái sử dụng CSS của trang Purchase History để "y hệt"
+    <link rel="stylesheet" href="~/css/purchase-history.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/leave-review-modal.css" asp-append-version="true" />
+}
+@{
+    ViewData["Title"] = "My Sales";
+}
+
+<div class="container-fluid px-3 px-md-5 py-4">
+
+    <div class="my-ebay-header">
+        <div class="my-ebay-title-nav">
+            <h1 class="my-ebay-title">My eBay</h1>
+            <ul class="my-ebay-subnav">
+                <li><a href="#">Activity</a></li>
+                <li><a href="#">Messages</a></li>
+                <li><a href="#">Account</a></li>
+            </ul>
+        </div>
+        <div class="my-ebay-user">
+            <a href="#">@Context.Session.GetString("Username")</a>
+        </div>
+    </div>
+
+    <div class="row gx-4">
+        <div class="col-12 col-md-3 col-lg-2">
+            <div class="my-ebay-sidebar">
+                <ul class="sidebar-nav list-unstyled">
+                    <li><a asp-action="Index" asp-controller="Home">Summary</a></li>
+                    <li><a href="#">Recently Viewed</a></li>
+                    <li><a href="#">Bids/Offers</a></li>
+                    <li><a href="#">Watchlist</a></li>
+                    <li>
+                        <a asp-action="Index" asp-controller="Purchase">Purchases</a>
+                    </li>
+                    <li><a href="#">Saved feed <span class="sidebar-new-badge">NEW</span></a></li>
+                    <li><a href="#">Saved searches</a></li>
+                    <li><a href="#">Saved sellers</a></li>
+                    <li class="sidebar-section-divider"></li>
+                    <li>
+                        <a asp-action="Index" asp-controller="Sales" class="active">Selling / My Sales</a>
+                    </li>
+                    <li><a href="#">My Garage</a></li>
+                    <li><a href="#">My Collection</a></li>
+                    <li><a href="#">Sizes</a></li>
+                    <li><a href="#">PSA Vault</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-9 col-lg-10">
+            <div class="purchase-history-content">
+
+                <div class="purchase-header">
+                    <h2 class="purchase-title">My Sales</h2>
+                    <form class="search-your-orders-form">
+                        <input type="text" class="form-control" placeholder="Search your sales" />
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </form>
+                </div>
+
+                <div class="purchase-view-options">
+                    <label for="seeOrders">See orders:</label>
+                    <select id="seeOrders" class="form-select form-select-sm">
+                        <option selected>All</option>
+                        <option>Last 60 days</option>
+                    </select>
+                </div>
+
+                <ul class="purchase-filter-nav">
+                    <li><a href="#" class="btn-filter-nav">Unpaid invoices</a></li>
+                    <li><a href="#" class="btn-filter-nav active">Orders</a></li>
+                    <li><a href="#" class="btn-filter-nav">Cancelled items</a></li>
+                    <li><a href="#" class="btn-filter-nav">Cancelled invoices</a></li>
+                    <li><a href="#" class="btn-filter-nav">Returns and cancelled orders</a></li>
+                </ul>
+
+                @if (TempData["Error"] != null)
+                {
+                    <div class="alert alert-danger">@TempData["Error"]</div>
+                }
+
+                <div class="order-list">
+
+                    @if (TempData["SuccessMessage"] != null)
+                    {
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            @TempData["SuccessMessage"]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    }
+                    @if (Model == null || !Model.Any())
+                    {
+                        <div class="order-card-empty text-center mt-5">
+                            <p class="h5 text-muted">No sales found.</p>
+                        </div>
+                    }
+
+                    @foreach (var order in Model)
+                    {
+                        var firstItem = order.Items.FirstOrDefault();
+
+                        <div class="order-card">
+                            <div class="order-card-header">
+                                <div class="order-info-est">
+                                    <span class="text-uppercase small-text">Order date:</span>
+                                    <span class="fw-bold">@order.OrderDate?.ToString("dd-MMM-yyyy")</span>
+                                </div>
+
+                                <div class="order-status-bar">
+                                    <div class="status-node @(order.OrderStatus == "Paid" || order.OrderStatus == "Dispatched" || order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
+                                        <div class="status-dot"></div>
+                                        <span class="status-label">PAID</span>
+                                    </div>
+                                    <div class="status-line @(order.OrderStatus == "Dispatched" || order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")"></div>
+                                    <div class="status-node @(order.OrderStatus == "Dispatched" || order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
+                                        <div class="status-dot"></div>
+                                        <span class="status-label">DISPATCHED</span>
+                                    </div>
+                                    <div class="status-line @(order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")"></div>
+                                    <div class="status-node @(order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
+                                        <div classs="status-dot"></div>
+                                        <span class="status-label">DELIVERED</span>
+                                    </div>
+                                </div>
+
+                                <div class="order-header-action">
+                                    @if (order.HasBuyerFeedback)
+                                    {
+                                        <a asp-controller="Feedback" asp-action="Details" asp-route-id="@order.BuyerFeedbackId"
+                                           class="btn btn-outline-secondary btn-leave-feedback-main"
+                                           style="background: white; border-color: #777; color: #333; min-width: 160px;">
+                                            View Feedback (@order.BuyerFeedbackRating?.ToString("0.0") ★)
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="feedback-left-text" style="min-width: 160px; text-align: right;">No feedback from buyer</span>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (firstItem != null)
+                            {
+                                <div class="order-card-body">
+                                    <div class="order-card-img">
+                                        <img src="https://placehold.co/120x120?text=Product+@(firstItem.ProductId)" alt="@firstItem.ProductTitle" />
+                                    </div>
+                                    <div class="order-product-info">
+                                        <h3 class="product-title-link"><a href="#">@firstItem.ProductTitle</a></h3>
+                                        <p class="small-text mb-1">Quantity: @firstItem.Quantity</p>
+                                        <p class="mb-1">
+                                            <span class="fw-bold">US $@firstItem.UnitPrice?.ToString("#,##0.00")</span>
+                                            <span class="text-muted small-text"> | (Order ID: @order.OrderId)</span>
+                                        </p>
+                                        <p class="text-muted small-text mb-2">Item ID: @firstItem.ProductId</p>
+
+                                        @if (order.Items.Count > 1)
+                                        {
+                                            <p class="small-text text-muted mb-0">...and @(order.Items.Count - 1) other item(s) in this order.</p>
+                                        }
+                                    </div>
+                                    <div class="order-seller-info">
+                                        <p class="small-text mb-1">BUYER:</p>
+                                        <a href="#" class="seller-username">@order.BuyerUsername</a>
+                                        <p class="text-muted small-text mb-0">(ID: @order.BuyerId)</p>
+                                    </div>
+                                    <div class="order-actions">
+                                        <div class="dropdown">
+                                            <button class="btn btn-secondary btn-i-d-like-to dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                I'd like to...
+                                            </button>
+
+                                            <ul class="dropdown-menu">
+                                                <li>
+                                                    <a class="dropdown-item" asp-controller="Sales" asp-action="Details" asp-route-id="@order.OrderId">
+                                                        View detail
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item"
+                                                       asp-controller="SellerReviews"
+                                                       asp-action="LeaveReview"
+                                                       asp-route-orderId="@order.OrderId">
+                                                        Review this buyer
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="leaveReviewModal" tabindex="-1" aria-labelledby="leaveReviewModalLabel" aria-hidden="true">
+</div>
