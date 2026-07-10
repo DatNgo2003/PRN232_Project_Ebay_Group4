@@ -4,7 +4,11 @@ namespace Backend.Services
 {
     public interface IOrderService
     {
-        Task<bool> CreateQuickBuyOrderAsync(string buyerUsername, int productId);
+        Task<QuickBuyCheckoutResponseDto?> CreateQuickBuyOrderAsync(
+            string buyerUsername,
+            int productId,
+            string? paymentMethod,
+            string? shippingRegion);
         Task<IEnumerable<PurchaseHistoryItemDto>> GetPurchaseHistoryAsync(string buyerUsername);
         Task<IEnumerable<SellerSalesOrderDto>> GetSalesHistoryAsync(string sellerUsername);
     }

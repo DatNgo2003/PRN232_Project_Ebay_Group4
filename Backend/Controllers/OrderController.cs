@@ -1,6 +1,8 @@
 ﻿using Backend.Services;
+using Backend.DTOs.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using System.Security.Claims;
 
 namespace Backend.Controllers
@@ -23,19 +25,31 @@ namespace Backend.Controllers
         }
 
         [HttpPost("quick-buy")]
-        public async Task<IActionResult> QuickBuy([FromQuery] int productId)
+        public async Task<IActionResult> QuickBuy(
+            [FromQuery] int productId,
+            [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] QuickBuyCheckoutRequestDto? request)
         {
             try
             {
                 var username = GetUsernameFromToken();
-                var success = await _orderService.CreateQuickBuyOrderAsync(username, productId);
+                var requestedProductId = request?.ProductId > 0 ? request.ProductId : productId;
+                if (requestedProductId <= 0)
+                {
+                    return BadRequest(new { message = "ProductId is required." });
+                }
 
-                if (!success)
+                var checkout = await _orderService.CreateQuickBuyOrderAsync(
+                    username,
+                    requestedProductId,
+                    request?.PaymentMethod,
+                    request?.ShippingRegion);
+
+                if (checkout == null)
                 {
                     return BadRequest(new { message = "Failed to create order. Product or user not found." });
                 }
 
-                return Ok(new { message = "Order created successfully." });
+                return Ok(new { message = "Order created successfully.", checkout });
             }
             catch (Exception ex)
             {
