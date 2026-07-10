@@ -10,9 +10,16 @@ namespace Backend.DTOs.Responses
         public string? ProductTitle { get; set; }
         public string? ProductImage { get; set; }
         public decimal? UnitPrice { get; set; }
+        public decimal? OrderTotalPrice { get; set; }
         public DateTime OrderDate { get; set; }
         public string FeedbackState { get; set; } = "N/A";
         public string? OrderStatus { get; set; }
+        public string? PaymentMethod { get; set; }
+        public string? PaymentStatus { get; set; }
+        public string? ShippingCarrier { get; set; }
+        public string? ShippingStatus { get; set; }
+        public string? TrackingNumber { get; set; }
+        public DateTime? EstimatedArrival { get; set; }
         public string? SellerUsername { get; set; }
         public int? SellerId { get; set; }
     }

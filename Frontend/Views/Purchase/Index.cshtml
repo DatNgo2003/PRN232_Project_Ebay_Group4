@@ -139,7 +139,7 @@
 
                                 @* Thanh trạng thái (giữ nguyên logic cũ) *@
                                 @{
-                                    bool isPaid = item.OrderStatus == "Completed" || item.OrderStatus == "Shipped";
+                                    bool isPaid = item.PaymentStatus == "Paid" || item.OrderStatus == "Completed" || item.OrderStatus == "Shipped";
                                     bool isShipped = item.OrderStatus == "Completed" || item.OrderStatus == "Shipped";
                                     bool isDelivered = item.OrderStatus == "Completed";
                                 }
@@ -207,8 +207,21 @@
                                     <p class="small-text mb-1">Size: (N/A)</p>
                                     <p class="mb-1">
                                         <span class="fw-bold">US $@item.UnitPrice?.ToString("#,##0.00")</span>
-                                        <span class="text-muted small-text"> | Free postage</span>
+                                        <span class="text-muted small-text"> | Order total: US $@item.OrderTotalPrice?.ToString("#,##0.00")</span>
                                     </p>
+                                    <p class="text-muted small-text mb-1">
+                                        Payment: @(item.PaymentMethod ?? "N/A") (@(item.PaymentStatus ?? "N/A"))
+                                    </p>
+                                    @if (!string.IsNullOrWhiteSpace(item.TrackingNumber))
+                                    {
+                                        <p class="text-muted small-text mb-1">
+                                            Shipping: @(item.ShippingStatus ?? "N/A") | Tracking: @item.TrackingNumber
+                                            @if (item.EstimatedArrival.HasValue)
+                                            {
+                                                <span>| ETA: @item.EstimatedArrival.Value.ToString("dd-MMM-yyyy")</span>
+                                            }
+                                        </p>
+                                    }
 
                                     @* ===== SỬA ĐỔI 2: HIỂN THỊ ITEM ID ===== *@
                                     <p class="text-muted small-text mb-2">Item ID: @item.ProductId</p>
