@@ -60,11 +60,18 @@ namespace Frontend.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Buy(int id)
+        public async Task<IActionResult> Buy(int id, string? paymentMethod, string? shippingRegion)
         {
             try
             {
-                var response = await _apiClient.PostEmptyAsync($"order/quick-buy?productId={id}");
+                var checkoutRequest = new Backend.DTOs.Requests.QuickBuyCheckoutRequestDto
+                {
+                    ProductId = id,
+                    PaymentMethod = paymentMethod,
+                    ShippingRegion = shippingRegion
+                };
+
+                var response = await _apiClient.PostAsync("order/quick-buy", checkoutRequest);
 
                 if (response.IsSuccessStatusCode)
                 {

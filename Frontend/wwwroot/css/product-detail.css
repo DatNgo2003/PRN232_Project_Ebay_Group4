@@ -54,6 +54,45 @@
     margin: 1rem 0;
 }
 
+.checkout-form {
+    max-width: 520px;
+}
+
+.checkout-options {
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background-color: #fff;
+}
+
+.checkout-field {
+    margin-bottom: 0.9rem;
+}
+
+.checkout-field .form-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #444;
+}
+
+.checkout-summary {
+    border-top: 1px solid #eeeeee;
+    padding-top: 0.75rem;
+}
+
+.checkout-summary div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.35rem;
+    color: #333;
+}
+
+.checkout-summary strong {
+    white-space: nowrap;
+}
+
 /* Các nút Mua hàng */
 .btn-buy-now {
     background-color: #3498db;

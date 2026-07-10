@@ -5,6 +5,7 @@
 @{
     ViewData["Title"] = Model.Title ?? "Product Detail";
     var sortedRatings = Model.RatingCounts.OrderByDescending(kv => kv.Key);
+    var productPrice = (Model.Price ?? 0m).ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 
 <div class="container product-detail-container">
@@ -43,8 +44,36 @@
                 US $@Model.Price?.ToString("#,##0.00")
             </div>
 
-            <form asp-controller="Product" asp-action="Buy" method="post">
+            <form asp-controller="Product" asp-action="Buy" method="post" class="checkout-form" data-product-price="@productPrice">
                 <input type="hidden" name="id" value="@Model.Id" />
+                <div class="checkout-options">
+                    <div class="checkout-field">
+                        <label for="paymentMethod" class="form-label">Payment method</label>
+                        <select id="paymentMethod" name="paymentMethod" class="form-select">
+                            <option value="COD" selected>Cash on delivery (COD)</option>
+                            <option value="PayPal">PayPal</option>
+                        </select>
+                    </div>
+                    <div class="checkout-field">
+                        <label for="shippingRegion" class="form-label">Shipping region</label>
+                        <select id="shippingRegion" name="shippingRegion" class="form-select">
+                            <option value="South" data-fee="6.00" selected>South - US $6.00</option>
+                            <option value="North" data-fee="5.00">North - US $5.00</option>
+                            <option value="Central" data-fee="7.50">Central - US $7.50</option>
+                            <option value="International" data-fee="20.00">International - US $20.00</option>
+                        </select>
+                    </div>
+                    <div class="checkout-summary">
+                        <div>
+                            <span>Shipping</span>
+                            <strong id="shippingFeeText">US $6.00</strong>
+                        </div>
+                        <div>
+                            <span>Total</span>
+                            <strong id="checkoutTotalText">US $@((Model.Price + 6m)?.ToString("#,##0.00"))</strong>
+                        </div>
+                    </div>
+                </div>
                 <button type="submit" class="btn btn-buy-now">Buy It Now</button>
                 <button type="button" class="btn btn-add-cart">Add to cart</button>
                 <button type="button" class="btn btn-watch-list">Add to Watchlist</button>
@@ -133,6 +162,32 @@
     </div>
 </div>
 <script>
+    (function() {
+        var form = document.querySelector('.checkout-form');
+        var regionSelect = document.getElementById('shippingRegion');
+        var shippingFeeText = document.getElementById('shippingFeeText');
+        var checkoutTotalText = document.getElementById('checkoutTotalText');
+
+        if (!form || !regionSelect || !shippingFeeText || !checkoutTotalText) return;
+
+        var productPrice = Number(form.getAttribute('data-product-price')) || 0;
+        var formatCurrency = function(value) {
+            return 'US $' + value.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        };
+        var updateCheckoutTotal = function() {
+            var selected = regionSelect.options[regionSelect.selectedIndex];
+            var shippingFee = Number(selected.getAttribute('data-fee')) || 0;
+            shippingFeeText.textContent = formatCurrency(shippingFee);
+            checkoutTotalText.textContent = formatCurrency(productPrice + shippingFee);
+        };
+
+        regionSelect.addEventListener('change', updateCheckoutTotal);
+        updateCheckoutTotal();
+    })();
+
     (function(){
         var btn = document.getElementById('chat-with-seller');
         if(!btn) return;
