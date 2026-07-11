@@ -20,17 +20,27 @@ namespace Backend.Repositories
             string paymentMethod,
             string paymentStatus,
             string orderStatus,
-            string shippingRegion,
+            int addressId,              
             string trackingNumber,
-            DateTime estimatedArrival)
+            DateTime estimatedArrival,
+            int quantity,
+            decimal subTotal,
+            decimal discountAmount,
+            decimal totalAmount,
+            int? couponId)
         {
-            var totalAmount = unitPrice + shippingFee;
             var newOrder = new OrderTable
             {
                 BuyerId = buyerId,
+                AddressId = addressId,       
                 OrderDate = DateTime.UtcNow,
                 TotalPrice = totalAmount,
-                Status = orderStatus
+                Status = orderStatus,
+
+                SubTotal = subTotal,
+                ShippingFee = shippingFee,
+                DiscountAmount = discountAmount,
+                CouponId = couponId
             };
 
             _context.OrderTables.Add(newOrder);
@@ -39,7 +49,7 @@ namespace Backend.Repositories
             {
                 Order = newOrder,
                 ProductId = productId,
-                Quantity = 1,
+                Quantity = quantity,
                 UnitPrice = unitPrice
             };
 
@@ -57,10 +67,15 @@ namespace Backend.Repositories
 
             _context.Payments.Add(payment);
 
+            var address = await _context.Addresses.FirstOrDefaultAsync(a => a.Id == addressId);
+            var carrierLabel = address != null
+                ? $"MockExpress - {address.City ?? address.Country ?? "N/A"}"
+                : "MockExpress";
+
             var shippingInfo = new ShippingInfo
             {
                 Order = newOrder,
-                Carrier = $"MockExpress - {shippingRegion}",
+                Carrier = carrierLabel,
                 TrackingNumber = trackingNumber,
                 Status = "Preparing",
                 EstimatedArrival = estimatedArrival
@@ -105,8 +120,6 @@ namespace Backend.Repositories
                 .ToListAsync();
         }
 
-        // ─── NEW METHODS ────────────────────────────────────────────────────────
-
         public async Task<OrderTable?> GetOrderWithDetailsAsync(int orderId)
         {
             return await _context.OrderTables
@@ -126,13 +139,11 @@ namespace Backend.Repositories
 
             if (order == null) return;
 
-            // Cập nhật tất cả ShippingInfo của order
             foreach (var shipping in order.ShippingInfos)
             {
                 shipping.Status = newShippingStatus;
             }
 
-            // Đồng bộ OrderTable.Status theo trạng thái giao hàng
             if (newShippingStatus.Equals("Delivered", StringComparison.OrdinalIgnoreCase))
             {
                 order.Status = "Completed";
@@ -178,4 +189,3 @@ namespace Backend.Repositories
         }
     }
 }
-

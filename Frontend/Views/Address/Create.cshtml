@@ -1,0 +1,155 @@
+﻿@model Backend.DTOs.Requests.CreateAddressDto
+@{
+    ViewData["Title"] = "Thêm địa chỉ giao hàng";
+}
+
+<div class="container py-4" style="max-width: 600px;">
+    <h2>Thêm địa chỉ giao hàng</h2>
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <li>@error.ErrorMessage</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <form asp-controller="Address" asp-action="Create" method="post" id="addressForm">
+        <input type="hidden" name="returnProductId" value="@ViewBag.ReturnProductId" />
+
+        <div class="mb-3">
+            <label class="form-label">Họ tên người nhận</label>
+            <input type="text" name="FullName" class="form-control" required />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Số điện thoại</label>
+            <input type="text" name="Phone" class="form-control" required />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Địa chỉ (số nhà, đường)</label>
+            <input type="text" name="Street" class="form-control" required />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Tỉnh/Thành phố</label>
+            <select id="provinceSelect" class="form-control" required>
+                <option value="">-- Chọn Tỉnh/Thành phố --</option>
+            </select>
+            <!-- Input thật gửi lên server, giữ tên City để khớp DTO -->
+            <input type="hidden" name="City" id="cityHidden" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Quận/Huyện</label>
+            <select id="districtSelect" class="form-control" disabled>
+                <option value="">-- Chọn Tỉnh/Thành phố trước --</option>
+            </select>
+            <!-- Giữ tên State để khớp DTO hiện có -->
+            <input type="hidden" name="State" id="stateHidden" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Quốc gia</label>
+            <select name="Country" class="form-control" required>
+                <option value="Vietnam" selected>Việt Nam</option>
+                <option value="Other">Nước ngoài</option>
+            </select>
+        </div>
+
+        <div class="form-check mb-3">
+            <input type="checkbox" name="IsDefault" value="true" class="form-check-input" id="isDefault" />
+            <label class="form-check-label" for="isDefault">Đặt làm địa chỉ mặc định</label>
+        </div>
+
+        <div id="formError" class="text-danger small mb-2"></div>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn" disabled>Lưu địa chỉ</button>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary">Huỷ</a>
+    </form>
+</div>
+
+<script>
+    (function () {
+        var provinceSelect = document.getElementById('provinceSelect');
+        var districtSelect = document.getElementById('districtSelect');
+        var cityHidden = document.getElementById('cityHidden');
+        var stateHidden = document.getElementById('stateHidden');
+        var submitBtn = document.getElementById('submitBtn');
+        var formError = document.getElementById('formError');
+        var form = document.getElementById('addressForm');
+
+        // Load danh sách Tỉnh/Thành khi vào trang
+        fetch('/Address/GetProvinces')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!Array.isArray(data) || data.length === 0) {
+                    formError.textContent = 'Không tải được danh sách tỉnh/thành. Vui lòng thử lại sau.';
+                    return;
+                }
+                data.forEach(function (p) {
+                    var opt = document.createElement('option');
+                    opt.value = p.code;
+                    opt.textContent = p.name;
+                    opt.dataset.name = p.name;
+                    provinceSelect.appendChild(opt);
+                });
+            })
+            .catch(function () {
+                formError.textContent = 'Không tải được danh sách tỉnh/thành. Vui lòng thử lại sau.';
+            });
+
+        // Khi chọn Tỉnh -> load Quận/Huyện
+        provinceSelect.addEventListener('change', function () {
+            var selectedOption = provinceSelect.options[provinceSelect.selectedIndex];
+            var provinceCode = provinceSelect.value;
+            var provinceName = selectedOption ? selectedOption.dataset.name : '';
+
+            cityHidden.value = provinceName || '';
+            districtSelect.innerHTML = '<option value="">-- Đang tải... --</option>';
+            districtSelect.disabled = true;
+            stateHidden.value = '';
+            submitBtn.disabled = true;
+
+            if (!provinceCode) {
+                districtSelect.innerHTML = '<option value="">-- Chọn Tỉnh/Thành phố trước --</option>';
+                return;
+            }
+
+            fetch('/Address/GetDistricts?provinceCode=' + provinceCode)
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    districtSelect.innerHTML = '<option value="">-- Chọn Quận/Huyện --</option>';
+                    if (data && Array.isArray(data.districts)) {
+                        data.districts.forEach(function (d) {
+                            var opt = document.createElement('option');
+                            opt.value = d.name;
+                            opt.textContent = d.name;
+                            districtSelect.appendChild(opt);
+                        });
+                        districtSelect.disabled = false;
+                    }
+                })
+                .catch(function () {
+                    formError.textContent = 'Không tải được danh sách quận/huyện.';
+                });
+        });
+
+        // Khi chọn Quận/Huyện -> cho phép submit
+        districtSelect.addEventListener('change', function () {
+            stateHidden.value = districtSelect.value;
+            submitBtn.disabled = !(cityHidden.value && stateHidden.value);
+        });
+
+        // Chặn submit nếu chưa chọn đủ
+        form.addEventListener('submit', function (e) {
+            if (!cityHidden.value || !stateHidden.value) {
+                e.preventDefault();
+                formError.textContent = 'Vui lòng chọn đầy đủ Tỉnh/Thành và Quận/Huyện.';
+            }
+        });
+    })();
+</script>

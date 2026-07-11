@@ -1,6 +1,8 @@
 using Backend.DTOs.Responses;
+using Backend.Exceptions;
 using Backend.Models;
 using Backend.Repositories;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 
@@ -12,18 +14,27 @@ namespace Backend.Services
         private readonly IProductRepository _productRepository;
         private readonly IUserRepository _userRepository;
         private readonly IEmailService _emailService;
+        private readonly ICouponRepository _couponRepository;
+        private readonly IShippingFeeCalculator _shippingFeeCalculator; // >>> THÊM: dùng chung chức năng 2 <
+        private readonly CloneEbayDbContext _context;                   // >>> THÊM: để lookup Address <
 
         public OrderService(
             IOrderRepository orderRepository,
             IProductRepository productRepository,
             IUserRepository userRepository,
-            IEmailService emailService
+            IEmailService emailService,
+            ICouponRepository couponRepository,
+            IShippingFeeCalculator shippingFeeCalculator, // >>> THÊM <
+            CloneEbayDbContext context                     // >>> THÊM <
         )
         {
             _orderRepository = orderRepository;
             _productRepository = productRepository;
             _userRepository = userRepository;
             _emailService = emailService;
+            _couponRepository = couponRepository;
+            _shippingFeeCalculator = shippingFeeCalculator;
+            _context = context;
         }
 
         private async Task<User?> GetUserFromUsername(string username)
@@ -35,7 +46,9 @@ namespace Backend.Services
             string buyerUsername,
             int productId,
             string? paymentMethod,
-            string? shippingRegion)
+            int? addressId,            // >>> SỬA: thay shippingRegion <
+            int quantity = 1,
+            string? couponCode = null)
         {
             var user = await GetUserFromUsername(buyerUsername);
             if (user == null) return null;
@@ -43,13 +56,43 @@ namespace Backend.Services
             var product = await _productRepository.GetProductByIdAsync(productId);
             if (product == null || product.Price == null) return null;
 
+            if (quantity <= 0) quantity = 1;
+
+            // >>> SỬA: lấy Address thật thay vì tự map region string <
+            var address = addressId.HasValue
+                ? await _context.Addresses.FirstOrDefaultAsync(a => a.Id == addressId.Value && a.UserId == user.Id)
+                : await _context.Addresses.FirstOrDefaultAsync(a => a.UserId == user.Id && a.IsDefault == true);
+
+            if (address == null)
+                throw new BusinessException("Không tìm thấy địa chỉ giao hàng. Vui lòng chọn hoặc thêm địa chỉ.");
+
             var normalizedPaymentMethod = NormalizePaymentMethod(paymentMethod);
-            var normalizedRegion = NormalizeShippingRegion(shippingRegion);
-            var shippingFee = CalculateShippingFee(normalizedRegion);
+
+            // >>> SỬA: dùng đúng IShippingFeeCalculator (chức năng 2) thay vì bảng giá tự chế <
+            var shippingFee = _shippingFeeCalculator.Calculate(address);
+
+            var subTotal = Math.Round(product.Price.Value * quantity, 2);
+            decimal discountAmount = 0;
+            string? appliedCouponCode = null;
+            int? appliedCouponId = null;
+
+            if (!string.IsNullOrWhiteSpace(couponCode))
+            {
+                var coupon = await _couponRepository.GetByCodeAsync(couponCode);
+                ValidateCoupon(coupon, productId);
+
+                discountAmount = Math.Round(subTotal * (coupon!.DiscountPercent!.Value / 100m), 2);
+                appliedCouponCode = coupon.Code;
+                appliedCouponId = coupon.Id;
+
+                await _couponRepository.IncrementUsedCountAsync(coupon.Id);
+            }
+
+            var totalAmount = Math.Max(0, subTotal - discountAmount + shippingFee);
+
             var paymentStatus = normalizedPaymentMethod == "PayPal" ? "Paid" : "Pending";
-            // PayPal is simulated as paid, but payment and shipping are separate states.
             var orderStatus = "Pending";
-            var estimatedArrival = DateTime.UtcNow.AddDays(GetEstimatedDeliveryDays(normalizedRegion));
+            var estimatedArrival = DateTime.UtcNow.AddDays(GetEstimatedDeliveryDays(address));
             var trackingNumber = GenerateTrackingNumber(productId, user.Id);
 
             var order = await _orderRepository.CreateSimpleOrderAsync(
@@ -60,22 +103,57 @@ namespace Backend.Services
                 normalizedPaymentMethod,
                 paymentStatus,
                 orderStatus,
-                normalizedRegion,
+                address.Id,          // >>> SỬA: truyền addressId thay vì region string <
                 trackingNumber,
-                estimatedArrival);
+                estimatedArrival,
+                quantity,
+                subTotal,
+                discountAmount,
+                totalAmount,
+                appliedCouponId);
+
+            // >>> Chức năng 4 (còn thiếu, ghi chú để bạn bổ sung sau): gửi email xác nhận thanh toán
+            // if (paymentStatus == "Paid" && user.Email != null)
+            //     await _emailService.SendPaymentConfirmationEmailAsync(user.Email, order.Id, totalAmount);
 
             return new QuickBuyCheckoutResponseDto
             {
                 OrderId = order.Id,
                 ProductPrice = product.Price.Value,
                 ShippingFee = shippingFee,
-                TotalAmount = product.Price.Value + shippingFee,
+                TotalAmount = totalAmount,
                 PaymentMethod = normalizedPaymentMethod,
                 PaymentStatus = paymentStatus,
-                ShippingRegion = normalizedRegion,
+
+                AddressId = address.Id,
+                ShippingDestination = $"{address.City ?? "N/A"}, {address.Country ?? "N/A"}",
+
                 TrackingNumber = trackingNumber,
-                EstimatedArrival = estimatedArrival
+                EstimatedArrival = estimatedArrival,
+
+                Quantity = quantity,
+                SubTotal = subTotal,
+                DiscountAmount = discountAmount,
+                AppliedCoupon = appliedCouponCode
             };
+        }
+
+        private void ValidateCoupon(Coupon? coupon, int productId)
+        {
+            if (coupon == null)
+                throw new BusinessException("Mã giảm giá không tồn tại");
+
+            var now = DateTime.UtcNow;
+            if (coupon.StartDate.HasValue && coupon.StartDate > now)
+                throw new BusinessException("Mã giảm giá chưa có hiệu lực");
+            if (coupon.EndDate.HasValue && coupon.EndDate < now)
+                throw new BusinessException("Mã giảm giá đã hết hạn");
+            if (coupon.MaxUsage.HasValue && (coupon.UsedCount ?? 0) >= coupon.MaxUsage.Value)
+                throw new BusinessException("Mã giảm giá đã hết lượt sử dụng");
+            if (coupon.ProductId.HasValue && coupon.ProductId.Value != productId)
+                throw new BusinessException("Mã giảm giá không áp dụng cho sản phẩm này");
+            if (coupon.DiscountPercent == null || coupon.DiscountPercent <= 0)
+                throw new BusinessException("Mã giảm giá không hợp lệ");
         }
 
         private static string NormalizePaymentMethod(string? paymentMethod)
@@ -88,42 +166,27 @@ namespace Backend.Services
             };
         }
 
-        private static string NormalizeShippingRegion(string? shippingRegion)
-        {
-            var region = shippingRegion?.Trim().ToLowerInvariant();
+        // >>> SỬA: bỏ NormalizeShippingRegion + CalculateShippingFee(string) — không còn dùng,
+        // phí ship giờ lấy từ IShippingFeeCalculator (chức năng 2) <
 
-            return region switch
-            {
-                "north" or "northern" or "ha noi" or "hanoi" => "North",
-                "central" or "middle" or "da nang" or "danang" => "Central",
-                "south" or "southern" or "ho chi minh" or "hcm" or "sai gon" or "saigon" => "South",
-                "international" or "overseas" => "International",
-                _ => "South"
-            };
-        }
+        // >>> SỬA: ước tính ngày giao hàng theo Address thay vì region string,
+        // dùng cùng tiêu chí phân loại nội thành/tỉnh khác/quốc tế như SimpleRegionShippingFeeCalculator <
 
-        private static decimal CalculateShippingFee(string shippingRegion)
+        private static int GetEstimatedDeliveryDays(Address address)
         {
-            return shippingRegion switch
+            if (address.Country != null &&
+                !address.Country.Equals("Vietnam", StringComparison.OrdinalIgnoreCase) &&
+                !address.Country.Equals("Việt Nam", StringComparison.OrdinalIgnoreCase))
             {
-                "North" => 5.00m,
-                "Central" => 7.50m,
-                "South" => 6.00m,
-                "International" => 20.00m,
-                _ => 10.00m
-            };
-        }
+                return 10;
+            }
 
-        private static int GetEstimatedDeliveryDays(string shippingRegion)
-        {
-            return shippingRegion switch
+            if (Backend.Services.Implementation.RegionHelper.IsInnerCity(address.City))
             {
-                "North" => 3,
-                "Central" => 4,
-                "South" => 2,
-                "International" => 10,
-                _ => 5
-            };
+                return 2;
+            }
+
+            return 5;
         }
 
         private static string GenerateTrackingNumber(int productId, int buyerId)
@@ -179,7 +242,7 @@ namespace Backend.Services
                 {
                     OrderItemId = item.Id,
                     OrderId = item.OrderId ?? 0,
-                    ProductId = item.Product.Id, // Đã có sẵn
+                    ProductId = item.Product.Id,
                     ProductTitle = item.Product.Title,
                     ProductImage = item.Product.Images,
                     UnitPrice = item.UnitPrice,
@@ -195,7 +258,6 @@ namespace Backend.Services
                     TrackingNumber = shippingInfo?.TrackingNumber,
                     EstimatedArrival = shippingInfo?.EstimatedArrival,
 
-                    // SỬA ĐỔI: Gán tên người bán thật
                     SellerUsername = item.Product.Seller?.Username ?? "Unknown Seller",
                     SellerId = item.Product.Seller?.Id ?? 0
                 });
@@ -248,18 +310,13 @@ namespace Backend.Services
             return groupedOrders.ToList();
         }
 
-        // ─── UPDATE SHIPPING STATUS ─────────────────────────────────────────────
-
         public async Task<bool> UpdateShippingStatusAsync(int orderId, string newShippingStatus)
         {
-            // 1. Lấy thông tin đơn hàng đầy đủ
             var order = await _orderRepository.GetOrderWithDetailsAsync(orderId);
             if (order == null) return false;
 
-            // 2. Cập nhật DB
             await _orderRepository.UpdateShippingStatusAsync(orderId, newShippingStatus);
 
-            // 3. Gửi email thông báo nếu status là Delivered hoặc Failed
             bool shouldNotify =
                 newShippingStatus.Equals("Delivered", StringComparison.OrdinalIgnoreCase) ||
                 newShippingStatus.Equals("Failed", StringComparison.OrdinalIgnoreCase);

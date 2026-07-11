@@ -8,17 +8,14 @@ namespace Backend.Services
             string buyerUsername,
             int productId,
             string? paymentMethod,
-            string? shippingRegion);
+            int? addressId,              
+            int quantity = 1,
+            string? couponCode = null);
 
         Task<IEnumerable<PurchaseHistoryItemDto>> GetPurchaseHistoryAsync(string buyerUsername);
 
         Task<IEnumerable<SellerSalesOrderDto>> GetSalesHistoryAsync(string sellerUsername);
 
-        /// <summary>
-        /// Cập nhật trạng thái giao hàng, đồng thời gửi email thông báo cho buyer.
-        /// newShippingStatus: "Delivered" | "Failed" | "Shipping" | v.v.
-        /// </summary>
         Task<bool> UpdateShippingStatusAsync(int orderId, string newShippingStatus);
     }
 }
-
