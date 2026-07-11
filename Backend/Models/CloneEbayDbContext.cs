@@ -158,6 +158,7 @@ public partial class CloneEbayDbContext : DbContext
             entity.Property(e => e.StartDate)
                 .HasColumnType("datetime")
                 .HasColumnName("startDate");
+            entity.Property(e => e.UsedCount).HasColumnName("usedCount").HasDefaultValue(0);
 
             entity.HasOne(d => d.Product).WithMany(p => p.Coupons)
                 .HasForeignKey(d => d.ProductId)
@@ -329,6 +330,14 @@ public partial class CloneEbayDbContext : DbContext
             entity.Property(e => e.TotalPrice)
                 .HasColumnType("decimal(10, 2)")
                 .HasColumnName("totalPrice");
+            entity.Property(e => e.SubTotal).HasColumnType("decimal(10, 2)").HasColumnName("subTotal");
+            entity.Property(e => e.ShippingFee).HasColumnType("decimal(10, 2)").HasColumnName("shippingFee");
+            entity.Property(e => e.DiscountAmount).HasColumnType("decimal(10, 2)").HasColumnName("discountAmount");
+            entity.Property(e => e.CouponId).HasColumnName("couponId");
+
+            entity.HasOne(d => d.Coupon).WithMany(p => p.OrderTables)
+                .HasForeignKey(d => d.CouponId)
+                .HasConstraintName("FK_OrderTable_couponId");
 
             entity.HasOne(d => d.Address).WithMany(p => p.OrderTables)
                 .HasForeignKey(d => d.AddressId)

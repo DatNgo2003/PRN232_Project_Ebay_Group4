@@ -19,6 +19,12 @@ public partial class OrderTable
 
     public bool? IsCommented { get; set; }
 
+    public decimal? SubTotal { get; set; }
+    public decimal? ShippingFee { get; set; }
+    public decimal? DiscountAmount { get; set; }
+    public int? CouponId { get; set; }
+    public virtual Coupon? Coupon { get; set; }
+
     public virtual Address? Address { get; set; }
 
     public virtual User? Buyer { get; set; }

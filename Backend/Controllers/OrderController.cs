@@ -1,5 +1,6 @@
 using Backend.Services;
 using Backend.DTOs.Requests;
+using Backend.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -13,10 +14,34 @@ namespace Backend.Controllers
     public class OrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly IOrderPricingService _orderPricingService; 
 
-        public OrderController(IOrderService orderService)
+        public OrderController(IOrderService orderService, IOrderPricingService orderPricingService)
         {
             _orderService = orderService;
+            _orderPricingService = orderPricingService; 
+        }
+
+        /// <summary>
+        /// Tính trước tổng tiền đơn hàng (SubTotal, DiscountAmount, ShippingFee, Total)
+        /// trước khi người dùng bấm mua thật. Không tạo đơn hàng, không lưu DB.
+        /// </summary>
+        [HttpPost("calculate-total")]
+        public async Task<IActionResult> CalculateTotal([FromBody] Backend.DTOs.Requests.CalculateOrderDto dto)
+        {
+            try
+            {
+                var result = await _orderPricingService.CalculateAsync(dto);
+                return Ok(result);
+            }
+            catch (BusinessException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
         }
 
         private string GetUsernameFromToken()
@@ -26,8 +51,8 @@ namespace Backend.Controllers
 
         [HttpPost("quick-buy")]
         public async Task<IActionResult> QuickBuy(
-            [FromQuery] int productId,
-            [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] QuickBuyCheckoutRequestDto? request)
+    [FromQuery] int productId,
+    [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] QuickBuyCheckoutRequestDto? request)
         {
             try
             {
@@ -42,7 +67,9 @@ namespace Backend.Controllers
                     username,
                     requestedProductId,
                     request?.PaymentMethod,
-                    request?.ShippingRegion);
+                    request?.AddressId,       
+                    request?.Quantity ?? 1,
+                    request?.CouponCode);
 
                 if (checkout == null)
                 {
@@ -50,6 +77,10 @@ namespace Backend.Controllers
                 }
 
                 return Ok(new { message = "Order created successfully.", checkout });
+            }
+            catch (BusinessException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -73,26 +104,21 @@ namespace Backend.Controllers
         }
 
         [HttpGet("seller/my-sales")]
-        [Authorize(Roles = "seller, supporter")] // Chỉ cho phép Seller
+        [Authorize(Roles = "seller, supporter")]
         public async Task<IActionResult> GetMySalesHistory()
         {
             try
             {
-                // Dùng hàm có sẵn để lấy username từ token
                 var username = GetUsernameFromToken();
-
-                // Gọi service method mới
                 var history = await _orderService.GetSalesHistoryAsync(username);
-
                 return Ok(history);
             }
-            catch (InvalidOperationException ex) // Lỗi từ GetUsernameFromToken
+            catch (InvalidOperationException ex)
             {
                 return Unauthorized(new { message = ex.Message });
             }
             catch (Exception ex)
             {
-                // Log lỗi ex ở đây
                 return StatusCode(500, new { message = "Lỗi máy chủ nội bộ: " + ex.Message });
             }
         }
@@ -102,8 +128,6 @@ namespace Backend.Controllers
         /// Khi status = "Delivered" hoặc "Failed", buyer sẽ nhận email thông báo tự động.
         /// Chỉ seller và supporter được phép gọi API này.
         /// </summary>
-        /// <param name="orderId">ID đơn hàng</param>
-        /// <param name="request">Body chứa trường "status": "Delivered" | "Failed" | "Shipping" | ...</param>
         [HttpPut("{orderId}/shipping-status")]
         [Authorize(Roles = "seller, supporter, admin")]
         public async Task<IActionResult> UpdateShippingStatus(
@@ -146,4 +170,3 @@ namespace Backend.Controllers
         }
     }
 }
-

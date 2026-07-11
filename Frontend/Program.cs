@@ -22,7 +22,7 @@ builder.Services.AddSession(options =>
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<ApiClientHelper>();
-
+builder.Services.AddHttpClient();
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())

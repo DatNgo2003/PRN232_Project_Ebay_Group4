@@ -4,6 +4,8 @@ namespace Backend.DTOs.Requests
     {
         public int ProductId { get; set; }
         public string? PaymentMethod { get; set; }
-        public string? ShippingRegion { get; set; }
+        public int? AddressId { get; set; }
+        public int Quantity { get; set; } = 1;
+        public string? CouponCode { get; set; }
     }
 }

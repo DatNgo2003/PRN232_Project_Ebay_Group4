@@ -16,8 +16,10 @@ public partial class Coupon
     public DateTime? EndDate { get; set; }
 
     public int? MaxUsage { get; set; }
-
     public int? ProductId { get; set; }
 
+    public int? UsedCount { get; set; }
+
+    public virtual ICollection<OrderTable> OrderTables { get; set; } = new List<OrderTable>();
     public virtual Product? Product { get; set; }
 }
