@@ -1,4 +1,4 @@
-﻿using Backend.Services;
+using Backend.Services;
 using Backend.DTOs.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -96,5 +96,54 @@ namespace Backend.Controllers
                 return StatusCode(500, new { message = "Lỗi máy chủ nội bộ: " + ex.Message });
             }
         }
+
+        /// <summary>
+        /// Cập nhật trạng thái giao hàng của đơn hàng.
+        /// Khi status = "Delivered" hoặc "Failed", buyer sẽ nhận email thông báo tự động.
+        /// Chỉ seller và supporter được phép gọi API này.
+        /// </summary>
+        /// <param name="orderId">ID đơn hàng</param>
+        /// <param name="request">Body chứa trường "status": "Delivered" | "Failed" | "Shipping" | ...</param>
+        [HttpPut("{orderId}/shipping-status")]
+        [Authorize(Roles = "seller, supporter, admin")]
+        public async Task<IActionResult> UpdateShippingStatus(
+            int orderId,
+            [FromBody] UpdateShippingStatusRequestDto request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.Status))
+            {
+                return BadRequest(new { message = "Trường 'status' không được để trống." });
+            }
+
+            var validStatuses = new[] { "Preparing", "Shipping", "Delivered", "Failed" };
+            if (!validStatuses.Contains(request.Status, StringComparer.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    message = $"Trạng thái không hợp lệ. Các giá trị cho phép: {string.Join(", ", validStatuses)}"
+                });
+            }
+
+            try
+            {
+                var updated = await _orderService.UpdateShippingStatusAsync(orderId, request.Status);
+                if (!updated)
+                {
+                    return NotFound(new { message = $"Không tìm thấy đơn hàng #{orderId}." });
+                }
+
+                return Ok(new
+                {
+                    message = $"Cập nhật trạng thái giao hàng thành '{request.Status}' thành công.",
+                    orderId,
+                    shippingStatus = request.Status
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi máy chủ nội bộ: " + ex.Message });
+            }
+        }
     }
 }
+

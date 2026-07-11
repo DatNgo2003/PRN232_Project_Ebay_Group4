@@ -47,6 +47,9 @@ builder.Services.AddCors(options =>
 });
 builder.Services.AddHostedService<DisputeEscalationService>();
 
+// Background service tự động huỷ đơn hàng quá hạn thanh toán
+builder.Services.AddHostedService<Backend.Backgrounds.OrderCancellationService>();
+
 var logPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "logs", "log.json");
 
 Log.Logger = new LoggerConfiguration()

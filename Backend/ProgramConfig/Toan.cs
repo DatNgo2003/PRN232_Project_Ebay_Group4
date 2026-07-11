@@ -1,4 +1,4 @@
-﻿using Backend.Models;
+using Backend.Models;
 using Backend.Repositories;
 using Backend.Services;
 using Backend.Utils;
@@ -30,6 +30,9 @@ namespace Backend.ProgramConfig
             services.AddScoped<IProductService, ProductService>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IReviewService, ReviewService>();
+
+            // Email service để gửi thông báo đơn hàng
+            services.AddScoped<IEmailService, EmailService>();
 
             services.AddScoped<AuthService>();
 

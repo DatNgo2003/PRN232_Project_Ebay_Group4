@@ -1,4 +1,4 @@
-﻿using Backend.Models;
+using Backend.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Repositories
@@ -104,5 +104,78 @@ namespace Backend.Repositories
                 .OrderByDescending(oi => oi.Order.OrderDate)
                 .ToListAsync();
         }
+
+        // ─── NEW METHODS ────────────────────────────────────────────────────────
+
+        public async Task<OrderTable?> GetOrderWithDetailsAsync(int orderId)
+        {
+            return await _context.OrderTables
+                .Include(o => o.Buyer)
+                .Include(o => o.ShippingInfos)
+                .Include(o => o.Payments)
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+        }
+
+        public async Task UpdateShippingStatusAsync(int orderId, string newShippingStatus)
+        {
+            var order = await _context.OrderTables
+                .Include(o => o.ShippingInfos)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null) return;
+
+            // Cập nhật tất cả ShippingInfo của order
+            foreach (var shipping in order.ShippingInfos)
+            {
+                shipping.Status = newShippingStatus;
+            }
+
+            // Đồng bộ OrderTable.Status theo trạng thái giao hàng
+            if (newShippingStatus.Equals("Delivered", StringComparison.OrdinalIgnoreCase))
+            {
+                order.Status = "Completed";
+            }
+            else if (newShippingStatus.Equals("Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                order.Status = "Failed";
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<IEnumerable<OrderTable>> GetPendingPaymentOrdersAsync(DateTime cutoffTime)
+        {
+            return await _context.OrderTables
+                .Include(o => o.Buyer)
+                .Include(o => o.Payments)
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                .Where(o =>
+                    o.Status == "Pending" &&
+                    o.OrderDate < cutoffTime &&
+                    o.Payments.Any(p => p.Status == "Pending"))
+                .ToListAsync();
+        }
+
+        public async Task CancelOrderAsync(int orderId)
+        {
+            var order = await _context.OrderTables
+                .Include(o => o.Payments)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null) return;
+
+            order.Status = "Cancelled";
+
+            foreach (var payment in order.Payments.Where(p => p.Status == "Pending"))
+            {
+                payment.Status = "Cancelled";
+            }
+
+            await _context.SaveChangesAsync();
+        }
     }
 }
+

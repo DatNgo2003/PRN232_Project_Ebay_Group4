@@ -1,4 +1,4 @@
-﻿using Backend.DTOs.Responses;
+using Backend.DTOs.Responses;
 using Backend.Models;
 using Backend.Repositories;
 using System;
@@ -11,16 +11,19 @@ namespace Backend.Services
         private readonly IOrderRepository _orderRepository;
         private readonly IProductRepository _productRepository;
         private readonly IUserRepository _userRepository;
+        private readonly IEmailService _emailService;
 
         public OrderService(
             IOrderRepository orderRepository,
             IProductRepository productRepository,
-            IUserRepository userRepository
+            IUserRepository userRepository,
+            IEmailService emailService
         )
         {
             _orderRepository = orderRepository;
             _productRepository = productRepository;
             _userRepository = userRepository;
+            _emailService = emailService;
         }
 
         private async Task<User?> GetUserFromUsername(string username)
@@ -243,6 +246,44 @@ namespace Backend.Services
                 });
 
             return groupedOrders.ToList();
+        }
+
+        // ─── UPDATE SHIPPING STATUS ─────────────────────────────────────────────
+
+        public async Task<bool> UpdateShippingStatusAsync(int orderId, string newShippingStatus)
+        {
+            // 1. Lấy thông tin đơn hàng đầy đủ
+            var order = await _orderRepository.GetOrderWithDetailsAsync(orderId);
+            if (order == null) return false;
+
+            // 2. Cập nhật DB
+            await _orderRepository.UpdateShippingStatusAsync(orderId, newShippingStatus);
+
+            // 3. Gửi email thông báo nếu status là Delivered hoặc Failed
+            bool shouldNotify =
+                newShippingStatus.Equals("Delivered", StringComparison.OrdinalIgnoreCase) ||
+                newShippingStatus.Equals("Failed", StringComparison.OrdinalIgnoreCase);
+
+            if (shouldNotify && order.Buyer?.Email != null)
+            {
+                var productNames = order.OrderItems
+                    .Select(oi => oi.Product?.Title ?? "(Sản phẩm không xác định)")
+                    .ToList();
+
+                var trackingNumber = order.ShippingInfos
+                    .OrderByDescending(s => s.EstimatedArrival)
+                    .FirstOrDefault()?.TrackingNumber ?? "N/A";
+
+                await _emailService.SendShippingStatusEmailAsync(
+                    toEmail: order.Buyer.Email,
+                    buyerName: order.Buyer.Username ?? order.Buyer.Email,
+                    orderId: order.Id,
+                    shippingStatus: newShippingStatus,
+                    productNames: productNames,
+                    trackingNumber: trackingNumber);
+            }
+
+            return true;
         }
     }
 }
