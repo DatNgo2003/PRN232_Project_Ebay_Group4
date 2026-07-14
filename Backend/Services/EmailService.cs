@@ -23,6 +23,42 @@ namespace Backend.Services
             _logger = logger;
         }
 
+        public async Task SendPaymentConfirmationEmailAsync(
+            string toEmail,
+            int orderId,
+            decimal totalAmount,
+            string? buyerName = null,
+            string? paymentMethod = null,
+            string? trackingNumber = null,
+            IEnumerable<string>? productNames = null)
+        {
+            buyerName ??= toEmail;
+            paymentMethod ??= "N/A";
+            var productList = string.Join("", (productNames ?? Enumerable.Empty<string>()).Select(p =>
+                $"<li style=\"padding:6px 0; border-bottom:1px solid #f3f4f6; color:#374151;\">{System.Net.WebUtility.HtmlEncode(p)}</li>"));
+
+            var extraInfo = $"<p style=\"margin:0 0 8px; color:#6b7280;\"><strong>Trạng thái thanh toán:</strong> Đã thanh toán</p>" +
+                $"<p style=\"margin:0 0 8px; color:#6b7280;\"><strong>Phương thức:</strong> {System.Net.WebUtility.HtmlEncode(paymentMethod)}</p>" +
+                $"<p style=\"margin:0 0 8px; color:#6b7280;\"><strong>Tổng tiền:</strong> {totalAmount:F2}</p>" +
+                $"<p style=\"margin:0; color:#6b7280;\"><strong>Mã vận đơn:</strong> {System.Net.WebUtility.HtmlEncode(trackingNumber ?? "N/A")}</p>";
+
+            var body = BuildEmailHtml(
+                buyerName,
+                statusColor: "#10b981",
+                statusIcon: "✓",
+                statusTitle: "Thanh toán thành công",
+                statusMessage: "Chúng tôi đã nhận được thanh toán cho đơn hàng của bạn. Đơn hàng sẽ được bàn giao cho đơn vị vận chuyển sớm.",
+                orderId,
+                productList,
+                extraInfo);
+
+            await SendEmailAsync(
+                toEmail,
+                buyerName,
+                $"Thanh toán thành công - Đơn hàng #{orderId}",
+                body);
+        }
+
         public async Task SendShippingStatusEmailAsync(
             string toEmail,
             string buyerName,

@@ -30,6 +30,9 @@ builder.Services.AddScoped<Backend.Repositories.ICouponRepository, Backend.Repos
 builder.Services.AddScoped<Backend.Services.IOrderPricingService, Backend.Services.OrderPricingService>();
 
 builder.Services.AddScoped<IShippingFeeCalculator, Backend.Services.Implementation.SimpleRegionShippingFeeCalculator>();
+// Simulated carrier API. Replace MockShippingService with a real provider without
+// changing the order or controller contracts.
+builder.Services.AddSingleton<IShippingService, MockShippingService>();
 builder.Services.AddScoped<Backend.Repositories.IAddressRepository, Backend.Repositories.AddressRepository>();
 builder.Services.AddScoped<Backend.Services.IAddressService, Backend.Services.AddressService>();
 builder.Services.AddControllers().AddJsonOptions(options =>

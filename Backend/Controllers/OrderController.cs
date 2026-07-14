@@ -150,7 +150,9 @@ namespace Backend.Controllers
 
             try
             {
-                var updated = await _orderService.UpdateShippingStatusAsync(orderId, request.Status);
+                var normalizedStatus = validStatuses.First(s =>
+                    s.Equals(request.Status.Trim(), StringComparison.OrdinalIgnoreCase));
+                var updated = await _orderService.UpdateShippingStatusAsync(orderId, normalizedStatus);
                 if (!updated)
                 {
                     return NotFound(new { message = $"Không tìm thấy đơn hàng #{orderId}." });
@@ -158,9 +160,9 @@ namespace Backend.Controllers
 
                 return Ok(new
                 {
-                    message = $"Cập nhật trạng thái giao hàng thành '{request.Status}' thành công.",
+                    message = $"Cập nhật trạng thái giao hàng thành '{normalizedStatus}' thành công.",
                     orderId,
-                    shippingStatus = request.Status
+                    shippingStatus = normalizedStatus
                 });
             }
             catch (Exception ex)

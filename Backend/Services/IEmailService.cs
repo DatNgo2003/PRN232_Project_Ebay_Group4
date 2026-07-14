@@ -3,6 +3,18 @@ namespace Backend.Services
     public interface IEmailService
     {
         /// <summary>
+        /// Sends a confirmation when a payment has been completed successfully.
+        /// </summary>
+        Task SendPaymentConfirmationEmailAsync(
+            string toEmail,
+            int orderId,
+            decimal totalAmount,
+            string? buyerName = null,
+            string? paymentMethod = null,
+            string? trackingNumber = null,
+            IEnumerable<string>? productNames = null);
+
+        /// <summary>
         /// Gửi email thông báo khi trạng thái giao hàng thay đổi (Delivered / Failed)
         /// </summary>
         Task SendShippingStatusEmailAsync(

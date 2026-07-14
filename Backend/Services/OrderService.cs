@@ -17,6 +17,7 @@ namespace Backend.Services
         private readonly ICouponRepository _couponRepository;
         private readonly IShippingFeeCalculator _shippingFeeCalculator; // >>> THÊM: dùng chung chức năng 2 <
         private readonly CloneEbayDbContext _context;                   // >>> THÊM: để lookup Address <
+        private readonly IShippingService _shippingService;
 
         public OrderService(
             IOrderRepository orderRepository,
@@ -25,7 +26,8 @@ namespace Backend.Services
             IEmailService emailService,
             ICouponRepository couponRepository,
             IShippingFeeCalculator shippingFeeCalculator, // >>> THÊM <
-            CloneEbayDbContext context                     // >>> THÊM <
+            CloneEbayDbContext context,                    // >>> THÊM <
+            IShippingService? shippingService = null
         )
         {
             _orderRepository = orderRepository;
@@ -35,6 +37,9 @@ namespace Backend.Services
             _couponRepository = couponRepository;
             _shippingFeeCalculator = shippingFeeCalculator;
             _context = context;
+            // Optional fallback keeps the service usable by existing callers
+            // while production DI supplies the singleton provider.
+            _shippingService = shippingService ?? new MockShippingService();
         }
 
         private async Task<User?> GetUserFromUsername(string username)
@@ -93,7 +98,10 @@ namespace Backend.Services
             var paymentStatus = normalizedPaymentMethod == "PayPal" ? "Paid" : "Pending";
             var orderStatus = "Pending";
             var estimatedArrival = DateTime.UtcNow.AddDays(GetEstimatedDeliveryDays(address));
-            var trackingNumber = GenerateTrackingNumber(productId, user.Id);
+            var shipment = await _shippingService.CreateShipmentAsync(
+                address,
+                estimatedArrival,
+                $"{user.Id}-{productId}");
 
             var order = await _orderRepository.CreateSimpleOrderAsync(
                 user.Id,
@@ -104,7 +112,7 @@ namespace Backend.Services
                 paymentStatus,
                 orderStatus,
                 address.Id,          // >>> SỬA: truyền addressId thay vì region string <
-                trackingNumber,
+                shipment.TrackingNumber,
                 estimatedArrival,
                 quantity,
                 subTotal,
@@ -112,9 +120,19 @@ namespace Backend.Services
                 totalAmount,
                 appliedCouponId);
 
-            // >>> Chức năng 4 (còn thiếu, ghi chú để bạn bổ sung sau): gửi email xác nhận thanh toán
-            // if (paymentStatus == "Paid" && user.Email != null)
-            //     await _emailService.SendPaymentConfirmationEmailAsync(user.Email, order.Id, totalAmount);
+            // PayPal is the simulated successful payment method. COD remains
+            // Pending and must not receive a paid confirmation.
+            if (paymentStatus == "Paid" && !string.IsNullOrWhiteSpace(user.Email))
+            {
+                await _emailService.SendPaymentConfirmationEmailAsync(
+                    toEmail: user.Email,
+                    buyerName: user.Username ?? user.Email,
+                    orderId: order.Id,
+                    totalAmount: totalAmount,
+                    paymentMethod: normalizedPaymentMethod,
+                    trackingNumber: shipment.TrackingNumber,
+                    productNames: new[] { product.Title ?? "(Sản phẩm không xác định)" });
+            }
 
             return new QuickBuyCheckoutResponseDto
             {
@@ -128,7 +146,8 @@ namespace Backend.Services
                 AddressId = address.Id,
                 ShippingDestination = $"{address.City ?? "N/A"}, {address.Country ?? "N/A"}",
 
-                TrackingNumber = trackingNumber,
+                TrackingNumber = shipment.TrackingNumber,
+                ShippingStatus = shipment.Status,
                 EstimatedArrival = estimatedArrival,
 
                 Quantity = quantity,
@@ -187,11 +206,6 @@ namespace Backend.Services
             }
 
             return 5;
-        }
-
-        private static string GenerateTrackingNumber(int productId, int buyerId)
-        {
-            return $"MOCK-{DateTime.UtcNow:yyyyMMddHHmmss}-{buyerId}-{productId}-{Guid.NewGuid():N}"[..40];
         }
 
         public async Task<IEnumerable<PurchaseHistoryItemDto>> GetPurchaseHistoryAsync(string buyerUsername)
@@ -315,6 +329,18 @@ namespace Backend.Services
             var order = await _orderRepository.GetOrderWithDetailsAsync(orderId);
             if (order == null) return false;
 
+            var trackingNumber = order.ShippingInfos
+                .OrderByDescending(s => s.EstimatedArrival)
+                .FirstOrDefault()?.TrackingNumber;
+            if (string.IsNullOrWhiteSpace(trackingNumber)) return false;
+
+            // Update the simulated carrier first. Do not change our order if
+            // the carrier rejects the tracking number/status.
+            var carrierUpdated = await _shippingService.UpdateShipmentStatusAsync(
+                trackingNumber,
+                newShippingStatus);
+            if (!carrierUpdated) return false;
+
             await _orderRepository.UpdateShippingStatusAsync(orderId, newShippingStatus);
 
             bool shouldNotify =
@@ -326,10 +352,6 @@ namespace Backend.Services
                 var productNames = order.OrderItems
                     .Select(oi => oi.Product?.Title ?? "(Sản phẩm không xác định)")
                     .ToList();
-
-                var trackingNumber = order.ShippingInfos
-                    .OrderByDescending(s => s.EstimatedArrival)
-                    .FirstOrDefault()?.TrackingNumber ?? "N/A";
 
                 await _emailService.SendShippingStatusEmailAsync(
                     toEmail: order.Buyer.Email,

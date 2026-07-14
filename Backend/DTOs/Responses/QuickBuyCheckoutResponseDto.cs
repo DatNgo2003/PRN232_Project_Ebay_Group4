@@ -13,6 +13,7 @@ namespace Backend.DTOs.Responses
         public string ShippingDestination { get; set; } = ""; 
 
         public string TrackingNumber { get; set; } = "";
+        public string ShippingStatus { get; set; } = "Preparing";
         public DateTime EstimatedArrival { get; set; }
 
         public int Quantity { get; set; }
