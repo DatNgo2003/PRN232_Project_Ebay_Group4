@@ -95,7 +95,10 @@ namespace Backend.Services
 
             var totalAmount = Math.Max(0, subTotal - discountAmount + shippingFee);
 
-            var paymentStatus = normalizedPaymentMethod == "PayPal" ? "Paid" : "Pending";
+            // PayPal is not considered paid until the server receives a successful
+            // capture response from PayPal. The PayPal checkout flow creates this
+            // local order as Pending and completes it in CompletePayPalPaymentAsync.
+            var paymentStatus = "Pending";
             var orderStatus = "Pending";
             var estimatedArrival = DateTime.UtcNow.AddDays(GetEstimatedDeliveryDays(address));
             var shipment = await _shippingService.CreateShipmentAsync(
@@ -120,20 +123,6 @@ namespace Backend.Services
                 totalAmount,
                 appliedCouponId);
 
-            // PayPal is the simulated successful payment method. COD remains
-            // Pending and must not receive a paid confirmation.
-            if (paymentStatus == "Paid" && !string.IsNullOrWhiteSpace(user.Email))
-            {
-                await _emailService.SendPaymentConfirmationEmailAsync(
-                    toEmail: user.Email,
-                    buyerName: user.Username ?? user.Email,
-                    orderId: order.Id,
-                    totalAmount: totalAmount,
-                    paymentMethod: normalizedPaymentMethod,
-                    trackingNumber: shipment.TrackingNumber,
-                    productNames: new[] { product.Title ?? "(Sản phẩm không xác định)" });
-            }
-
             return new QuickBuyCheckoutResponseDto
             {
                 OrderId = order.Id,
@@ -155,6 +144,118 @@ namespace Backend.Services
                 DiscountAmount = discountAmount,
                 AppliedCoupon = appliedCouponCode
             };
+        }
+
+        public async Task<bool> AttachPayPalOrderAsync(
+            string buyerUsername,
+            int orderId,
+            string paypalOrderId)
+        {
+            if (string.IsNullOrWhiteSpace(paypalOrderId)) return false;
+
+            var user = await GetUserFromUsername(buyerUsername);
+            if (user == null) return false;
+
+            var order = await _context.OrderTables
+                .Include(o => o.Payments)
+                .FirstOrDefaultAsync(o => o.Id == orderId && o.BuyerId == user.Id);
+
+            var payment = order?.Payments
+                .OrderByDescending(p => p.Id)
+                .FirstOrDefault(p => p.Method == "PayPal");
+
+            if (payment == null || payment.Status != "Pending") return false;
+
+            payment.PayPalOrderId = paypalOrderId;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> IsPayPalOrderOwnedAsync(
+            string buyerUsername,
+            int orderId,
+            string paypalOrderId)
+        {
+            if (string.IsNullOrWhiteSpace(paypalOrderId)) return false;
+
+            var user = await GetUserFromUsername(buyerUsername);
+            if (user == null) return false;
+
+            return await _context.Payments.AnyAsync(p =>
+                p.OrderId == orderId &&
+                p.UserId == user.Id &&
+                p.Method == "PayPal" &&
+                p.PayPalOrderId == paypalOrderId &&
+                (p.Status == "Pending" || p.Status == "Paid"));
+        }
+
+        public async Task<PayPalPaymentCompletionResultDto?> CompletePayPalPaymentAsync(
+            string buyerUsername,
+            int orderId,
+            string paypalOrderId,
+            string paypalCaptureId,
+            decimal capturedAmount,
+            string currency)
+        {
+            var user = await GetUserFromUsername(buyerUsername);
+            if (user == null) return null;
+
+            var order = await _context.OrderTables
+                .Include(o => o.Buyer)
+                .Include(o => o.Payments)
+                .Include(o => o.ShippingInfos)
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.Id == orderId && o.BuyerId == user.Id);
+
+            var payment = order?.Payments
+                .OrderByDescending(p => p.Id)
+                .FirstOrDefault(p => p.Method == "PayPal" && p.PayPalOrderId == paypalOrderId);
+
+            if (order == null || payment == null) return null;
+
+            if (order.TotalPrice == null ||
+                order.TotalPrice.Value != capturedAmount ||
+                !string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BusinessException("Số tiền hoặc loại tiền PayPal không khớp với đơn hàng.");
+            }
+
+            if (payment.Status != "Paid")
+            {
+                payment.Status = "Paid";
+                payment.PaidAt = DateTime.UtcNow;
+                payment.PayPalCaptureId = paypalCaptureId;
+                order.Status = "Paid";
+                await _context.SaveChangesAsync();
+
+                if (!string.IsNullOrWhiteSpace(order.Buyer?.Email))
+                {
+                    await _emailService.SendPaymentConfirmationEmailAsync(
+                        toEmail: order.Buyer.Email,
+                        buyerName: order.Buyer.Username ?? order.Buyer.Email,
+                        orderId: order.Id,
+                        totalAmount: order.TotalPrice ?? 0,
+                        paymentMethod: "PayPal",
+                        trackingNumber: order.ShippingInfos.FirstOrDefault()?.TrackingNumber,
+                        productNames: order.OrderItems.Select(oi => oi.Product?.Title ?? "(Sản phẩm không xác định)"));
+                }
+            }
+
+            return new PayPalPaymentCompletionResultDto
+            {
+                OrderId = order.Id,
+                PayPalOrderId = paypalOrderId,
+                PayPalCaptureId = paypalCaptureId,
+                PaymentStatus = payment.Status ?? "Paid",
+                TotalAmount = order.TotalPrice ?? 0,
+                Currency = currency
+            };
+        }
+
+        public async Task CancelOrderAsync(int orderId)
+        {
+            await _orderRepository.CancelOrderAsync(orderId);
         }
 
         private void ValidateCoupon(Coupon? coupon, int productId)

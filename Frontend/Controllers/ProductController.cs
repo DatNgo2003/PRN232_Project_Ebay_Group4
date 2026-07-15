@@ -9,11 +9,16 @@ namespace Frontend.Controllers
     {
         private readonly ApiClientHelper _apiClient;
         private readonly ILogger<ProductController> _logger;
+        private readonly IConfiguration _configuration;
 
-        public ProductController(ApiClientHelper apiClient, ILogger<ProductController> logger)
+        public ProductController(
+            ApiClientHelper apiClient,
+            ILogger<ProductController> logger,
+            IConfiguration configuration)
         {
             _apiClient = apiClient;
             _logger = logger;
+            _configuration = configuration;
         }
 
         [HttpGet]
@@ -37,6 +42,8 @@ namespace Frontend.Controllers
 
                     ViewBag.Addresses = await GetMyAddressesAsync();
                     ViewBag.Coupons = await GetAvailableCouponsAsync(id); // >>> THÊM MỚI <
+                    ViewBag.PayPalClientId = _configuration["PayPal:ClientId"];
+                    ViewBag.PayPalCurrency = _configuration["PayPal:Currency"] ?? "USD";
 
                     return View(productDetail);
                 }
@@ -190,6 +197,64 @@ namespace Frontend.Controllers
                 _logger.LogError(ex, $"Lỗi nghiêm trọng khi Buy sản phẩm ID: {id}");
                 return View("Error");
             }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreatePayPalOrder(
+            [FromBody] PayPalCreateOrderProxyRequest request)
+        {
+            try
+            {
+                var response = await _apiClient.PostAsync("paypal/create-order", request);
+                var content = await response.Content.ReadAsStringAsync();
+                return new ContentResult
+                {
+                    StatusCode = (int)response.StatusCode,
+                    ContentType = "application/json",
+                    Content = content
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi tạo PayPal order cho ProductId={ProductId}", request.ProductId);
+                return StatusCode(502, new { message = "Không thể kết nối PayPal." });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CapturePayPalOrder(
+            [FromBody] PayPalCaptureProxyRequest request)
+        {
+            try
+            {
+                var response = await _apiClient.PostAsync("paypal/capture-order", request);
+                var content = await response.Content.ReadAsStringAsync();
+                return new ContentResult
+                {
+                    StatusCode = (int)response.StatusCode,
+                    ContentType = "application/json",
+                    Content = content
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi capture PayPal order {PayPalOrderId}", request.PayPalOrderId);
+                return StatusCode(502, new { message = "Không thể kết nối PayPal." });
+            }
+        }
+
+        public sealed class PayPalCreateOrderProxyRequest
+        {
+            public int ProductId { get; set; }
+            public int? AddressId { get; set; }
+            public int Quantity { get; set; } = 1;
+            public string? CouponCode { get; set; }
+        }
+
+        public sealed class PayPalCaptureProxyRequest
+        {
+            public int OrderId { get; set; }
+            public string PayPalOrderId { get; set; } = string.Empty;
         }
     }
 }

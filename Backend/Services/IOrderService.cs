@@ -17,5 +17,25 @@ namespace Backend.Services
         Task<IEnumerable<SellerSalesOrderDto>> GetSalesHistoryAsync(string sellerUsername);
 
         Task<bool> UpdateShippingStatusAsync(int orderId, string newShippingStatus);
+
+        Task<bool> AttachPayPalOrderAsync(
+            string buyerUsername,
+            int orderId,
+            string paypalOrderId);
+
+        Task<bool> IsPayPalOrderOwnedAsync(
+            string buyerUsername,
+            int orderId,
+            string paypalOrderId);
+
+        Task<PayPalPaymentCompletionResultDto?> CompletePayPalPaymentAsync(
+            string buyerUsername,
+            int orderId,
+            string paypalOrderId,
+            string paypalCaptureId,
+            decimal capturedAmount,
+            string currency);
+
+        Task CancelOrderAsync(int orderId);
     }
 }

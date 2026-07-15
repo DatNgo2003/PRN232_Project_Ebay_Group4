@@ -2,6 +2,7 @@ using Backend.Middleware;
 using Backend.Models;
 using Backend.ProgramConfig;
 using Backend.Services;
+using Backend.Configuration;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -17,6 +18,17 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 builder.Services.AddDbContext<CloneEbayDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.Configure<PayPalOptions>(builder.Configuration.GetSection("PayPal"));
+builder.Services.AddHttpClient<IPayPalClient, PayPalClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<PayPalOptions>>()
+        .Value;
+
+    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 builder.Services.AddMyServices1(builder.Configuration);
 builder.Services.AddMyServices2();

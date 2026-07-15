@@ -369,6 +369,12 @@ public partial class CloneEbayDbContext : DbContext
             entity.Property(e => e.PaidAt)
                 .HasColumnType("datetime")
                 .HasColumnName("paidAt");
+            entity.Property(e => e.PayPalOrderId)
+                .HasMaxLength(50)
+                .HasColumnName("paypalOrderId");
+            entity.Property(e => e.PayPalCaptureId)
+                .HasMaxLength(50)
+                .HasColumnName("paypalCaptureId");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");

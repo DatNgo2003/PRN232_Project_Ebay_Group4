@@ -1,4 +1,5 @@
 ﻿@model ProductDetailDto
+@inject IConfiguration Configuration
 @section Styles {
     <link rel="stylesheet" href="~/css/product-detail.css" asp-append-version="true" />
     <style>
@@ -33,6 +34,8 @@
 @{
     ViewData["Title"] = Model.Title ?? "Product Detail";
     var sortedRatings = Model.RatingCounts.OrderByDescending(kv => kv.Key);
+    var paypalClientId = ViewBag.PayPalClientId as string ?? Configuration["PayPal:ClientId"];
+    var paypalCurrency = ViewBag.PayPalCurrency as string ?? Configuration["PayPal:Currency"] ?? "USD";
     var productPrice = (Model.Price ?? 0m).ToString(System.Globalization.CultureInfo.InvariantCulture);
     var addresses = ViewBag.Addresses as List<Backend.DTOs.Responses.AddressDto>;
     var coupons = ViewBag.Coupons as List<Backend.DTOs.Responses.CouponDto>;
@@ -170,6 +173,8 @@
                     </div>
                 </div>
                 <button type="submit" class="btn btn-buy-now">Buy It Now</button>
+                <div id="paypal-button-container" class="mt-3" style="display:none;"></div>
+                <div id="paypal-error" class="text-danger small mt-2"></div>
                 <button type="button" class="btn btn-add-cart">Add to cart</button>
                 <button type="button" class="btn btn-watch-list">Add to Watchlist</button>
             </form>
@@ -257,6 +262,11 @@
     </div>
 </div>
 
+@if (!string.IsNullOrWhiteSpace(paypalClientId))
+{
+    <script src="https://www.paypal.com/sdk/js?client-id=@paypalClientId&currency=@paypalCurrency&components=buttons"></script>
+}
+
 <script>
     (function () {
         var form = document.querySelector('.checkout-form');
@@ -275,6 +285,10 @@
         var totalEl = document.getElementById('summaryTotal');
         var errorEl = document.getElementById('summaryError');
         var couponMessageEl = document.getElementById('couponMessage');
+        var paymentMethodSelect = document.getElementById('paymentMethod');
+        var buyButton = form.querySelector('.btn-buy-now');
+        var paypalContainer = document.getElementById('paypal-button-container');
+        var paypalError = document.getElementById('paypal-error');
 
         var formatCurrency = function (value) {
             return 'US $' + Number(value || 0).toLocaleString('en-US', {
@@ -363,6 +377,87 @@
                     refreshTotal();
                 });
             });
+        }
+
+        function getPayPalPayload() {
+            return {
+                productId: productId,
+                addressId: addressSelect && addressSelect.value ? Number(addressSelect.value) : null,
+                quantity: Number(quantityInput.value) || 1,
+                couponCode: couponCodeInput.value ? couponCodeInput.value.trim() : null
+            };
+        }
+
+        function setPaymentMethodUi() {
+            var isPayPal = paymentMethodSelect && paymentMethodSelect.value === 'PayPal';
+            if (buyButton) buyButton.style.display = isPayPal ? 'none' : '';
+            if (paypalContainer) paypalContainer.style.display = isPayPal ? 'block' : 'none';
+            if (paypalError) paypalError.textContent = '';
+        }
+
+        if (paymentMethodSelect) {
+            paymentMethodSelect.addEventListener('change', setPaymentMethodUi);
+            setPaymentMethodUi();
+        }
+
+        if (window.paypal && paypalContainer) {
+            paypal.Buttons({
+                style: { layout: 'vertical', shape: 'rect', label: 'paypal' },
+                createOrder: function () {
+                    var payload = getPayPalPayload();
+                    if (!payload.addressId) {
+                        var error = 'Vui lòng chọn địa chỉ giao hàng.';
+                        paypalError.textContent = error;
+                        return Promise.reject(new Error(error));
+                    }
+
+                    paypalError.textContent = '';
+                    return fetch('/Product/CreatePayPalOrder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(async function (response) {
+                        var data = await response.json();
+                        if (!response.ok || !data.id) {
+                            throw new Error(data.message || 'Không thể tạo đơn PayPal.');
+                        }
+                        window.paypalLocalOrderId = data.orderId;
+                        return data.id;
+                    })
+                    .catch(function (error) {
+                        paypalError.textContent = error.message;
+                        throw error;
+                    });
+                },
+                onApprove: function (data) {
+                    return fetch('/Product/CapturePayPalOrder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            orderId: window.paypalLocalOrderId,
+                            paypalOrderId: data.orderID
+                        })
+                    })
+                    .then(async function (response) {
+                        var result = await response.json();
+                        if (!response.ok || result.paymentStatus !== 'Paid') {
+                            throw new Error(result.message || 'PayPal chưa hoàn tất thanh toán.');
+                        }
+                        window.location.href = '/Purchase/Index';
+                    })
+                    .catch(function (error) {
+                        paypalError.textContent = error.message;
+                    });
+                },
+                onCancel: function () {
+                    paypalError.textContent = 'Bạn đã hủy thanh toán PayPal.';
+                },
+                onError: function (error) {
+                    console.error('PayPal error', error);
+                    paypalError.textContent = 'Có lỗi xảy ra với PayPal. Vui lòng thử lại.';
+                }
+            }).render('#paypal-button-container');
         }
 
         refreshTotal();
