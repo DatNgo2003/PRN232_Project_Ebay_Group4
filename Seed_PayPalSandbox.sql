@@ -54,6 +54,10 @@ BEGIN TRY
         SET @BuyerId = CONVERT(int, SCOPE_IDENTITY());
     END;
 
+    UPDATE [User]
+    SET email = @BuyerEmail
+    WHERE id = @BuyerId;
+
     SELECT @SellerId = id
     FROM [User]
     WHERE username = @SellerUsername;
