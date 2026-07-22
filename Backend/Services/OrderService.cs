@@ -2,6 +2,7 @@ using Backend.DTOs.Responses;
 using Backend.Exceptions;
 using Backend.Models;
 using Backend.Repositories;
+using Backend.Services.PaymentGateways;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
@@ -15,9 +16,10 @@ namespace Backend.Services
         private readonly IUserRepository _userRepository;
         private readonly IEmailService _emailService;
         private readonly ICouponRepository _couponRepository;
-        private readonly IShippingFeeCalculator _shippingFeeCalculator; // >>> THÊM: dùng chung chức năng 2 <
-        private readonly CloneEbayDbContext _context;                   // >>> THÊM: để lookup Address <
+        private readonly IShippingFeeCalculator _shippingFeeCalculator; // >>> THÊM: dùng chung chức năng 2 
+        private readonly CloneEbayDbContext _context;                   // >>> THÊM: để lookup Address 
         private readonly IShippingService _shippingService;
+        private readonly IPaymentGatewayFactory? _paymentGatewayFactory; // >>> MỚI: plug-in cổng thanh toán 
 
         public OrderService(
             IOrderRepository orderRepository,
@@ -25,9 +27,10 @@ namespace Backend.Services
             IUserRepository userRepository,
             IEmailService emailService,
             ICouponRepository couponRepository,
-            IShippingFeeCalculator shippingFeeCalculator, // >>> THÊM <
-            CloneEbayDbContext context,                    // >>> THÊM <
-            IShippingService? shippingService = null
+            IShippingFeeCalculator shippingFeeCalculator, // >>> THÊM 
+            CloneEbayDbContext context,                    // >>> THÊM 
+            IShippingService? shippingService = null,
+            IPaymentGatewayFactory? paymentGatewayFactory = null // >>> MỚI 
         )
         {
             _orderRepository = orderRepository;
@@ -40,6 +43,7 @@ namespace Backend.Services
             // Optional fallback keeps the service usable by existing callers
             // while production DI supplies the singleton provider.
             _shippingService = shippingService ?? new MockShippingService();
+            _paymentGatewayFactory = paymentGatewayFactory;
         }
 
         private async Task<User?> GetUserFromUsername(string username)
@@ -51,7 +55,7 @@ namespace Backend.Services
             string buyerUsername,
             int productId,
             string? paymentMethod,
-            int? addressId,            // >>> SỬA: thay shippingRegion <
+            int? addressId,            // >>> SỬA: thay shippingRegion 
             int quantity = 1,
             string? couponCode = null)
         {
@@ -63,7 +67,7 @@ namespace Backend.Services
 
             if (quantity <= 0) quantity = 1;
 
-            // >>> SỬA: lấy Address thật thay vì tự map region string <
+            // >>> SỬA: lấy Address thật thay vì tự map region string 
             var address = addressId.HasValue
                 ? await _context.Addresses.FirstOrDefaultAsync(a => a.Id == addressId.Value && a.UserId == user.Id)
                 : await _context.Addresses.FirstOrDefaultAsync(a => a.UserId == user.Id && a.IsDefault == true);
@@ -73,7 +77,7 @@ namespace Backend.Services
 
             var normalizedPaymentMethod = NormalizePaymentMethod(paymentMethod);
 
-            // >>> SỬA: dùng đúng IShippingFeeCalculator (chức năng 2) thay vì bảng giá tự chế <
+            // >>> SỬA: dùng đúng IShippingFeeCalculator (chức năng 2) thay vì bảng giá tự chế 
             var shippingFee = _shippingFeeCalculator.Calculate(address);
 
             var subTotal = Math.Round(product.Price.Value * quantity, 2);
@@ -95,6 +99,19 @@ namespace Backend.Services
 
             var totalAmount = Math.Max(0, subTotal - discountAmount + shippingFee);
 
+            // >>> MỚI: gọi cổng thanh toán qua kiến trúc plug-in (IPaymentGatewayFactory).
+            // Với COD, bước "khởi tạo" đồng thời log lại transaction để truy vết.
+            // PayPal được khởi tạo ở PayPalController (sau khi có OrderId làm reference_id).
+            if (normalizedPaymentMethod == "COD" && _paymentGatewayFactory != null)
+            {
+                var codGateway = _paymentGatewayFactory.Resolve("COD");
+                await codGateway.InitiateAsync(new PaymentInitiationRequest(
+                    totalAmount,
+                    "VND",
+                    $"{user.Id}-{productId}-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                    $"COD order - user {user.Id} - product {productId}"));
+            }
+
             // PayPal is not considered paid until the server receives a successful
             // capture response from PayPal. The PayPal checkout flow creates this
             // local order as Pending and completes it in CompletePayPalPaymentAsync.
@@ -114,7 +131,7 @@ namespace Backend.Services
                 normalizedPaymentMethod,
                 paymentStatus,
                 orderStatus,
-                address.Id,          // >>> SỬA: truyền addressId thay vì region string <
+                address.Id,          // >>> SỬA: truyền addressId thay vì region string 
                 shipment.TrackingNumber,
                 estimatedArrival,
                 quantity,
@@ -287,10 +304,10 @@ namespace Backend.Services
         }
 
         // >>> SỬA: bỏ NormalizeShippingRegion + CalculateShippingFee(string) — không còn dùng,
-        // phí ship giờ lấy từ IShippingFeeCalculator (chức năng 2) <
+        // phí ship giờ lấy từ IShippingFeeCalculator (chức năng 2) 
 
         // >>> SỬA: ước tính ngày giao hàng theo Address thay vì region string,
-        // dùng cùng tiêu chí phân loại nội thành/tỉnh khác/quốc tế như SimpleRegionShippingFeeCalculator <
+        // dùng cùng tiêu chí phân loại nội thành/tỉnh khác/quốc tế như SimpleRegionShippingFeeCalculator 
 
         private static int GetEstimatedDeliveryDays(Address address)
         {
