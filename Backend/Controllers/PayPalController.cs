@@ -1,5 +1,6 @@
 using Backend.DTOs.Requests;
 using Backend.Services;
+using Backend.Services.PaymentGateways;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -14,18 +15,21 @@ namespace Backend.Controllers;
 public sealed class PayPalController : ControllerBase
 {
     private readonly IOrderService _orderService;
-    private readonly IPayPalClient _paypalClient;
+    private readonly IPaymentGatewayFactory _paymentGatewayFactory;
+    private readonly ITransactionLogger _txLogger;
     private readonly PayPalOptions _paypalOptions;
     private readonly ILogger<PayPalController> _logger;
 
     public PayPalController(
         IOrderService orderService,
-        IPayPalClient paypalClient,
+        IPaymentGatewayFactory paymentGatewayFactory,
+        ITransactionLogger txLogger,
         IOptions<PayPalOptions> paypalOptions,
         ILogger<PayPalController> logger)
     {
         _orderService = orderService;
-        _paypalClient = paypalClient;
+        _paymentGatewayFactory = paymentGatewayFactory;
+        _txLogger = txLogger;
         _paypalOptions = paypalOptions.Value;
         _logger = logger;
     }
@@ -37,6 +41,9 @@ public sealed class PayPalController : ControllerBase
     {
         if (request.ProductId <= 0)
             return BadRequest(new { message = "ProductId is required." });
+
+        var txId = _txLogger.StartTransaction("Payment.PayPal", "CreateOrder",
+            new { request.ProductId, request.Quantity });
 
         try
         {
@@ -52,43 +59,53 @@ public sealed class PayPalController : ControllerBase
             if (checkout == null)
                 return BadRequest(new { message = "Unable to prepare the order." });
 
-            PayPalOrderResult paypalOrder;
-            try
-            {
-                paypalOrder = await _paypalClient.CreateOrderAsync(
+            var gateway = _paymentGatewayFactory.Resolve("PayPal");
+            var initiation = await gateway.InitiateAsync(
+                new PaymentInitiationRequest(
                     checkout.TotalAmount,
+                    _paypalOptions.Currency,
                     checkout.OrderId.ToString(),
-                    $"Order #{checkout.OrderId}",
-                    cancellationToken);
-            }
-            catch
+                    $"Order #{checkout.OrderId}"),
+                cancellationToken);
+
+            if (!initiation.Success)
             {
                 await _orderService.CancelOrderAsync(checkout.OrderId);
-                throw;
+                _txLogger.LogFailure(txId, "Payment.PayPal", "CreateOrder",
+                    new InvalidOperationException("PayPal initiation failed."), new { checkout.OrderId });
+                return StatusCode(502, new { message = "Không thể tạo thanh toán PayPal. Vui lòng thử lại." });
             }
 
             var attached = await _orderService.AttachPayPalOrderAsync(
                 username,
                 checkout.OrderId,
-                paypalOrder.Id);
+                initiation.ProviderTransactionId);
 
             if (!attached)
             {
                 await _orderService.CancelOrderAsync(checkout.OrderId);
+                _txLogger.LogFailure(txId, "Payment.PayPal", "CreateOrder",
+                    new InvalidOperationException("Không thể gắn PayPal order vào đơn hàng nội bộ."),
+                    new { checkout.OrderId });
                 return BadRequest(new { message = "Unable to link the PayPal order." });
             }
 
+            _txLogger.LogSuccess(txId, "Payment.PayPal", "CreateOrder",
+                new { checkout.OrderId, PayPalOrderId = initiation.ProviderTransactionId });
+
             return Ok(new
             {
-                id = paypalOrder.Id,
+                id = initiation.ProviderTransactionId,
                 orderId = checkout.OrderId,
-                status = paypalOrder.Status,
+                status = initiation.Status,
                 amount = checkout.TotalAmount,
-                currency = _paypalOptions.Currency
+                currency = _paypalOptions.Currency,
+                transactionId = txId
             });
         }
         catch (Exception ex)
         {
+            _txLogger.LogInterModuleError(txId, "Payment.PayPal", "PayPal API", "CreateOrder", ex);
             _logger.LogError(ex, "Failed to create PayPal order for product {ProductId}", request.ProductId);
             return StatusCode(502, new { message = "Không thể tạo thanh toán PayPal. Vui lòng thử lại." });
         }
@@ -102,6 +119,9 @@ public sealed class PayPalController : ControllerBase
         if (request.OrderId <= 0 || string.IsNullOrWhiteSpace(request.PayPalOrderId))
             return BadRequest(new { message = "OrderId and PayPalOrderId are required." });
 
+        var txId = _txLogger.StartTransaction("Payment.PayPal", "CaptureOrder",
+            new { request.OrderId, request.PayPalOrderId });
+
         try
         {
             var username = GetUsernameFromToken();
@@ -113,39 +133,48 @@ public sealed class PayPalController : ControllerBase
             if (!owned)
                 return NotFound(new { message = "PayPal order không tồn tại hoặc không thuộc tài khoản này." });
 
-            var capture = await _paypalClient.CaptureOrderAsync(
-                request.PayPalOrderId,
-                cancellationToken);
+            var gateway = _paymentGatewayFactory.Resolve("PayPal");
+            var capture = await gateway.CaptureAsync(request.PayPalOrderId, cancellationToken);
 
-            if (!string.Equals(capture.Status, "COMPLETED", StringComparison.OrdinalIgnoreCase))
+            if (!capture.Success)
             {
-                return BadRequest(new
-                {
-                    message = "PayPal chưa hoàn tất thanh toán.",
-                    status = capture.Status
-                });
+                _txLogger.LogFailure(txId, "Payment.PayPal", "CaptureOrder",
+                    new InvalidOperationException($"Trạng thái capture: {capture.Status}"), new { request.OrderId });
+                return BadRequest(new { message = "PayPal chưa hoàn tất thanh toán.", status = capture.Status });
             }
 
             if (capture.Amount == null ||
-                string.IsNullOrWhiteSpace(capture.Id) ||
-                !string.Equals(capture.CurrencyCode, _paypalOptions.Currency, StringComparison.OrdinalIgnoreCase))
+                string.IsNullOrWhiteSpace(capture.ProviderTransactionId) ||
+                !string.Equals(capture.Currency, _paypalOptions.Currency, StringComparison.OrdinalIgnoreCase))
+            {
+                _txLogger.LogFailure(txId, "Payment.PayPal", "CaptureOrder",
+                    new InvalidOperationException("Capture trả về số tiền/tiền tệ không hợp lệ."), new { request.OrderId });
                 return BadRequest(new { message = "PayPal không trả về số tiền capture hợp lệ." });
+            }
 
             var completed = await _orderService.CompletePayPalPaymentAsync(
                 username,
                 request.OrderId,
                 request.PayPalOrderId,
-                capture.Id,
+                capture.ProviderTransactionId,
                 capture.Amount.Value,
-                capture.CurrencyCode!);
+                capture.Currency!);
 
             if (completed == null)
+            {
+                _txLogger.LogFailure(txId, "Payment.PayPal", "CaptureOrder",
+                    new InvalidOperationException("Không tìm thấy đơn hàng nội bộ."), new { request.OrderId });
                 return NotFound(new { message = "Không tìm thấy đơn hàng nội bộ để cập nhật." });
+            }
+
+            _txLogger.LogSuccess(txId, "Payment.PayPal", "CaptureOrder",
+                new { request.OrderId, capture.ProviderTransactionId });
 
             return Ok(completed);
         }
         catch (Exception ex)
         {
+            _txLogger.LogInterModuleError(txId, "Payment.PayPal", "PayPal API", "CaptureOrder", ex);
             _logger.LogError(ex, "Failed to capture PayPal order {PayPalOrderId}", request.PayPalOrderId);
             return StatusCode(502, new { message = "Không thể hoàn tất thanh toán PayPal. Vui lòng thử lại." });
         }

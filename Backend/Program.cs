@@ -2,6 +2,7 @@ using Backend.Middleware;
 using Backend.Models;
 using Backend.ProgramConfig;
 using Backend.Services;
+using Backend.Services.PaymentGateways;
 using Backend.Configuration;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -42,9 +43,28 @@ builder.Services.AddScoped<Backend.Repositories.ICouponRepository, Backend.Repos
 builder.Services.AddScoped<Backend.Services.IOrderPricingService, Backend.Services.OrderPricingService>();
 
 builder.Services.AddScoped<IShippingFeeCalculator, Backend.Services.Implementation.SimpleRegionShippingFeeCalculator>();
-// Simulated carrier API. Replace MockShippingService with a real provider without
-// changing the order or controller contracts.
-builder.Services.AddSingleton<IShippingService, MockShippingService>();
+
+// === Transaction logging (dùng chung cho Payment + Shipping) ===
+builder.Services.AddSingleton<ITransactionLogger, TransactionLogger>();
+
+// === Shipping: plug-in qua decorator ===
+// MockShippingService là carrier giả lập hiện tại. Muốn đổi sang carrier thật,
+// chỉ cần viết class mới implement IShippingService và đổi dòng
+// AddSingleton<MockShippingService>() bên dưới — LoggingShippingServiceDecorator
+// và toàn bộ OrderService/Controller không cần sửa gì thêm.
+builder.Services.AddSingleton<MockShippingService>();
+builder.Services.AddSingleton<IShippingService>(sp => new LoggingShippingServiceDecorator(
+    sp.GetRequiredService<MockShippingService>(),
+    sp.GetRequiredService<ITransactionLogger>()));
+
+// === Payment gateways: plug-in qua factory ===
+// Muốn thêm cổng thanh toán mới (VNPay, Momo...): tạo class implement IPaymentGateway
+// rồi đăng ký thêm 1 dòng AddScoped<IPaymentGateway, ...> bên dưới. Không cần sửa
+// PayPalController/OrderService/IPaymentGatewayFactory.
+builder.Services.AddScoped<IPaymentGateway, PayPalPaymentGateway>();
+builder.Services.AddScoped<IPaymentGateway, CodPaymentGateway>();
+builder.Services.AddScoped<IPaymentGatewayFactory, PaymentGatewayFactory>();
+
 builder.Services.AddScoped<Backend.Repositories.IAddressRepository, Backend.Repositories.AddressRepository>();
 builder.Services.AddScoped<Backend.Services.IAddressService, Backend.Services.AddressService>();
 builder.Services.AddControllers().AddJsonOptions(options =>
