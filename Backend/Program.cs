@@ -46,7 +46,7 @@ builder.Services.AddScoped<IShippingFeeCalculator, Backend.Services.Implementati
 
 // === Transaction logging (dùng chung cho Payment + Shipping) ===
 builder.Services.AddSingleton<ITransactionLogger, TransactionLogger>();
-
+builder.Services.AddScoped<IWebhookReplayGuard, DbWebhookReplayGuard>();
 // === Shipping: plug-in qua decorator ===
 // MockShippingService là carrier giả lập hiện tại. Muốn đổi sang carrier thật,
 // chỉ cần viết class mới implement IShippingService và đổi dòng

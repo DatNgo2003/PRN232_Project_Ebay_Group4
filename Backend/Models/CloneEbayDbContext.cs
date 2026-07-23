@@ -41,6 +41,7 @@ public partial class CloneEbayDbContext : DbContext
 
     public virtual DbSet<Product> Products { get; set; }
 
+    public virtual DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents { get; set; }
     public virtual DbSet<ReturnRequest> ReturnRequests { get; set; }
 
     public virtual DbSet<Review> Reviews { get; set; }
@@ -567,6 +568,15 @@ public partial class CloneEbayDbContext : DbContext
             entity.Property(e => e.Username)
                 .HasMaxLength(100)
                 .HasColumnName("username");
+        });
+
+        modelBuilder.Entity<ProcessedWebhookEvent>(entity =>
+        {
+            entity.ToTable("ProcessedWebhookEvent");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.EventKey).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.ProcessedAt).HasColumnType("datetime");
+            entity.HasIndex(e => e.EventKey).IsUnique();
         });
 
         OnModelCreatingPartial(modelBuilder);
