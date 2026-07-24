@@ -1,0 +1,143 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test SignalR - Hệ thống Giao hàng</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: auto;
+        }
+
+        .box {
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            padding: 8px;
+            margin-right: 10px;
+            width: 100px;
+        }
+
+        button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+            button:hover {
+                background: #0056b3;
+            }
+
+        #logArea {
+            background: #f4f4f4;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .log-item {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+
+        .info {
+            color: blue;
+        }
+    </style>
+    <!-- Nhúng thư viện SignalR của Microsoft qua CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+</head>
+<body>
+
+    <h2>📡 Màn hình Khách hàng (Real-time)</h2>
+
+    <div class="box">
+        <label>Nhập User ID của bạn:</label>
+        <input type="number" id="txtUserId" value="1" />
+        <button id="btnConnect" onclick="connectAndJoin()">Kết nối & Lắng nghe</button>
+        <span id="status" style="margin-left: 15px; color: gray;">Chưa kết nối</span>
+    </div>
+
+    <div id="logArea"></div>
+
+    <script>// Cấu hình kết nối tới Nginx Load Balancer (Port 8080) hoặc trực tiếp tới API
+        // Hãy đổi port 8080 thành port thật nếu bạn cấu hình khác
+        // Đổi thành cổng 7233 và dùng https
+        const hubUrl = "https://localhost:7233/hubs/order-notifications";
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl(hubUrl)
+            .withAutomaticReconnect() // Tự động kết nối lại nếu rớt mạng
+            .build();
+
+        // 1. Lắng nghe sự kiện Thành công từ BackgroundWorker
+        connection.on("OrderShippingUpdated", (data) => {
+            writeLog(`[THÀNH CÔNG] Đơn hàng đã được xử lý vận chuyển! Dữ liệu: ${JSON.stringify(data)}`, 'success');
+        });
+
+        // 2. Lắng nghe sự kiện Thất bại từ BackgroundWorker
+        connection.on("OrderShippingFailed", (data) => {
+            writeLog(`[THẤT BẠI] Lỗi kết nối API vận chuyển. Dữ liệu: ${JSON.stringify(data)}`, 'error');
+        });
+
+        // Hàm kết nối và join group
+        async function connectAndJoin() {
+            const userId = parseInt(document.getElementById("txtUserId").value);
+            if (!userId) return alert("Vui lòng nhập User ID");
+
+            try {
+                document.getElementById("status").innerText = "Đang kết nối...";
+
+                // Bắt đầu kết nối
+                if (connection.state === signalR.HubConnectionState.Disconnected) {
+                    await connection.start();
+                }
+
+                // Gọi hàm JoinUserGroup trên Server
+                await connection.invoke("JoinUserGroup", userId);
+
+                document.getElementById("status").innerText = `Đã kết nối (User: ${userId})`;
+                document.getElementById("status").style.color = "green";
+                writeLog(`Đã tham gia kênh thông báo của User ${userId}`, 'info');
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById("status").innerText = "Lỗi kết nối!";
+                document.getElementById("status").style.color = "red";
+                writeLog(`Lỗi: ${err.toString()}`, 'error');
+            }
+        }
+
+        // Hàm in log ra màn hình
+        function writeLog(message, type) {
+            const logArea = document.getElementById("logArea");
+            const time = new Date().toLocaleTimeString();
+            logArea.innerHTML += `<div class="log-item ${type}">[${time}] ${message}</div>`;
+            logArea.scrollTop = logArea.scrollHeight; // Tự động cuộn xuống dòng mới nhất
+        }</script>
+
+</body>
+</html>

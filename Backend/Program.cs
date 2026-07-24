@@ -47,12 +47,18 @@ builder.Services.AddScoped<IShippingFeeCalculator, Backend.Services.Implementati
 // === Transaction logging (dùng chung cho Payment + Shipping) ===
 builder.Services.AddSingleton<ITransactionLogger, TransactionLogger>();
 builder.Services.AddScoped<IWebhookReplayGuard, DbWebhookReplayGuard>();
-// === Shipping: plug-in qua decorator ===
-// MockShippingService là carrier giả lập hiện tại. Muốn đổi sang carrier thật,
-// chỉ cần viết class mới implement IShippingService và đổi dòng
-// AddSingleton<MockShippingService>() bên dưới — LoggingShippingServiceDecorator
-// và toàn bộ OrderService/Controller không cần sửa gì thêm.
-builder.Services.AddSingleton<MockShippingService>();
+// === Shipping HTTP Client with Polly Resilience Handler ===
+builder.Services.AddHttpClient<MockShippingService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+})
+.AddStandardResilienceHandler(options =>
+{
+    options.Retry.MaxRetryAttempts = 3;
+    options.Retry.Delay = TimeSpan.FromSeconds(2);
+    options.Retry.BackoffType = Polly.DelayBackoffType.Exponential;
+});
+
 builder.Services.AddSingleton<IShippingService>(sp => new LoggingShippingServiceDecorator(
     sp.GetRequiredService<MockShippingService>(),
     sp.GetRequiredService<ITransactionLogger>()));
@@ -100,22 +106,29 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 });
-// Configure CORS: allow the frontend origin and allow credentials for SignalR
+// Configure CORS: allow all origins dynamically for SignalR negotiation and local testing while enabling credentials
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowSpecificOrigins", policyBuilder =>
     {
         policyBuilder
-            .WithOrigins("http://localhost:5055") // frontend origin - adjust if your frontend runs on a different origin
+            .SetIsOriginAllowed(_ => true) // Allows any origin (localhost, 127.0.0.1, LiveServer, etc.) while permitting credentials
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials(); // required for SignalR negotiate when credentials mode is 'include'
+            .AllowCredentials(); // required for SignalR negotiation
     });
 });
 builder.Services.AddHostedService<DisputeEscalationService>();
 
 // Background service tự động huỷ đơn hàng quá hạn thanh toán
 builder.Services.AddHostedService<Backend.Backgrounds.OrderCancellationService>();
+
+// Add SignalR services
+builder.Services.AddSignalR();
+
+// === Bounded Channel Queue & Decoupled Shipping BackgroundWorker ===
+builder.Services.AddSingleton<IShippingTaskQueue, Backend.Services.Implementation.ShippingTaskQueue>();
+builder.Services.AddHostedService<Backend.Backgrounds.ShippingBackgroundWorker>();
 
 var logPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "logs", "log.json");
 
@@ -134,8 +147,6 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-
-
 var app = builder.Build();
 app.UseForwardedHeaders();
 if (app.Environment.IsDevelopment())
@@ -153,17 +164,16 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 
 app.UseSerilogRequestLogging();
 app.UseAuthentication();
-
 app.UseAuthorization();
 
 app.UseRateLimiter();
 
-app.UseCors("AllowAll");
-
 app.MapControllers()
-   .RequireRateLimiting("fixed_by_ip"); app.UseRateLimiter();
+   .RequireRateLimiting("fixed_by_ip");
+
 // Map SignalR hub and require the same CORS policy for hub endpoints
 app.MapHub<Backend.Hubs.ChatHub>("/hubs/chat").RequireCors("AllowSpecificOrigins");
+app.MapHub<Backend.Hubs.OrderNotificationHub>("/hubs/order-notifications").RequireCors("AllowSpecificOrigins");
 
 // Development helper: optionally remove Message table FK constraints so messages can be saved
 // using only senderId/receiverId integers (useful for demo environments where users may not exist).
