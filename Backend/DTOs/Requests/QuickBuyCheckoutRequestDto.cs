@@ -7,5 +7,6 @@ namespace Backend.DTOs.Requests
         public int? AddressId { get; set; }
         public int Quantity { get; set; } = 1;
         public string? CouponCode { get; set; }
+        public string? CarrierKey { get; set; }
     }
 }

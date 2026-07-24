@@ -460,6 +460,22 @@
             }).render('#paypal-button-container');
         }
 
+        var addCartBtn = form.querySelector('.btn-add-cart');
+        if (addCartBtn) {
+            addCartBtn.addEventListener('click', function () {
+                var qty = quantityInput ? (Number(quantityInput.value) || 1) : 1;
+                fetch('/Cart/Add?productId=' + productId + '&quantity=' + qty, { method: 'POST' })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        window.location.href = '/Cart/Index';
+                    })
+                    .catch(function (err) {
+                        console.error('add to cart error', err);
+                        alert('Không thể thêm vào giỏ hàng.');
+                    });
+            });
+        }
+
         refreshTotal();
     })();
 

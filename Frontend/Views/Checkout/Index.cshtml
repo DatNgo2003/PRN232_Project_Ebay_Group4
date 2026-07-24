@@ -1,0 +1,295 @@
+﻿@model List<CartLineViewModel>
+@inject IConfiguration Configuration
+@{
+    ViewData["Title"] = "Checkout";
+    var addresses = ViewBag.Addresses as List<AddressDto>;
+    var paypalClientId = ViewBag.PayPalClientId as string ?? Configuration["PayPal:ClientId"];
+    var paypalCurrency = ViewBag.PayPalCurrency as string ?? Configuration["PayPal:Currency"] ?? "USD";
+    var subTotal = Model.Sum(i => i.LineTotal);
+}
+
+<div class="container my-4">
+    <h2 class="mb-4">Review your order</h2>
+
+    @if (TempData["CheckoutError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["CheckoutError"]</div>
+    }
+
+    <div class="row">
+        <div class="col-md-7">
+            <div class="border rounded p-3 mb-3">
+                <h5>Items (@Model.Sum(i => i.Quantity))</h5>
+                @foreach (var item in Model)
+                {
+                    <div class="d-flex align-items-center py-2 border-bottom">
+                        <img src="@item.Image" alt="@item.Title" style="width:60px;height:60px;object-fit:cover;" class="me-3 rounded" />
+                        <div class="flex-grow-1">
+                            <div class="fw-bold">@item.Title</div>
+                            <div class="text-muted small">Qty: @item.Quantity x US $@item.UnitPrice.ToString("#,##0.00")</div>
+                        </div>
+                        <div class="fw-bold">US $@item.LineTotal.ToString("#,##0.00")</div>
+                    </div>
+                }
+            </div>
+
+            <div class="border rounded p-3 mb-3">
+                <h5>Ship to</h5>
+                @if (addresses != null && addresses.Any())
+                {
+                    <select id="addressId" class="form-select">
+                        @foreach (var addr in addresses)
+                        {
+                            <option value="@addr.Id" selected="@(addr.IsDefault ? "selected" : null)">
+                                @addr.Street, @addr.City, @addr.Country @(addr.IsDefault ? "(Mặc định)" : "")
+                            </option>
+                        }
+                    </select>
+                    <a asp-controller="Address" asp-action="Create" class="form-text">+ Thêm địa chỉ mới</a>
+                }
+                else
+                {
+                    <p class="text-danger">Bạn chưa có địa chỉ giao hàng.</p>
+                    <a asp-controller="Address" asp-action="Create" class="btn btn-sm btn-outline-primary">+ Thêm địa chỉ giao hàng</a>
+                }
+            </div>
+
+            <div class="border rounded p-3 mb-3">
+                <h5>Payment method</h5>
+                <select id="paymentMethod" class="form-select">
+                    <option value="COD" selected>Cash on delivery (COD)</option>
+                    <option value="PayPal">PayPal</option>
+                </select>
+            </div>
+
+            <div class="border rounded p-3 mb-3">
+                <h5>Promo code</h5>
+                <input type="text" id="couponCode" class="form-control" placeholder="Nhập mã giảm giá (nếu có)" />
+                <div id="couponMessage" class="form-text"></div>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="border rounded p-3" id="orderSummaryBox">
+                <h5>Order summary</h5>
+                <div class="d-flex justify-content-between">
+                    <span>Subtotal</span>
+                    <strong id="summarySubTotal">US $@subTotal.ToString("#,##0.00")</strong>
+                </div>
+                <div class="d-flex justify-content-between text-success" id="summaryDiscountRow" style="display:none;">
+                    <span>Discount</span>
+                    <strong id="summaryDiscount">- US $0.00</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Shipping</span>
+                    <strong id="summaryShippingFee">US $0.00</strong>
+                </div>
+                <hr />
+                <div class="d-flex justify-content-between fs-5">
+                    <span>Total</span>
+                    <strong id="summaryTotal">US $@subTotal.ToString("#,##0.00")</strong>
+                </div>
+                <div id="summaryError" class="text-danger small mt-1"></div>
+
+                <form id="placeOrderForm" asp-controller="Checkout" asp-action="PlaceOrder" method="post" class="mt-3">
+                    <input type="hidden" name="addressId" id="hiddenAddressId" />
+                    <input type="hidden" name="couponCode" id="hiddenCouponCode" />
+                    <button type="submit" id="placeOrderBtn" class="btn btn-warning w-100 fw-bold">Place your order</button>
+                </form>
+
+                <div id="paypal-button-container" class="mt-3" style="display:none;"></div>
+                <div id="paypal-error" class="text-danger small mt-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(paypalClientId))
+{
+    <script src="https://www.paypal.com/sdk/js?client-id=@paypalClientId&currency=@paypalCurrency&components=buttons"></script>
+}
+
+<script>
+    (function () {
+        var addressSelect = document.getElementById('addressId');
+        var paymentMethodSelect = document.getElementById('paymentMethod');
+        var couponCodeInput = document.getElementById('couponCode');
+        var couponMessageEl = document.getElementById('couponMessage');
+
+        var subTotalEl = document.getElementById('summarySubTotal');
+        var discountRowEl = document.getElementById('summaryDiscountRow');
+        var discountEl = document.getElementById('summaryDiscount');
+        var shippingEl = document.getElementById('summaryShippingFee');
+        var totalEl = document.getElementById('summaryTotal');
+        var errorEl = document.getElementById('summaryError');
+
+        var placeOrderForm = document.getElementById('placeOrderForm');
+        var placeOrderBtn = document.getElementById('placeOrderBtn');
+        var hiddenAddressId = document.getElementById('hiddenAddressId');
+        var hiddenCouponCode = document.getElementById('hiddenCouponCode');
+        var paypalContainer = document.getElementById('paypal-button-container');
+        var paypalError = document.getElementById('paypal-error');
+
+        var formatCurrency = function (value) {
+            return 'US $' + Number(value || 0).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        };
+
+        async function refreshTotal() {
+            errorEl.textContent = '';
+            couponMessageEl.textContent = '';
+            couponMessageEl.classList.remove('text-danger', 'text-success');
+
+            if (!addressSelect || !addressSelect.value) {
+                errorEl.textContent = 'Vui lòng chọn địa chỉ giao hàng để xem tổng tiền.';
+                return;
+            }
+
+            var payload = {
+                addressId: Number(addressSelect.value),
+                couponCode: couponCodeInput.value ? couponCodeInput.value.trim() : null
+            };
+
+            try {
+                var res = await fetch('/Checkout/CalculateTotal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                var data = await res.json();
+
+                if (!res.ok) {
+                    var msg = data && data.message ? data.message : 'Không thể tính tổng tiền.';
+                    errorEl.textContent = msg;
+                    if (payload.couponCode) {
+                        couponMessageEl.textContent = msg;
+                        couponMessageEl.classList.add('text-danger');
+                    }
+                    return;
+                }
+
+                subTotalEl.textContent = formatCurrency(data.subTotal);
+                shippingEl.textContent = formatCurrency(data.shippingFee);
+                totalEl.textContent = formatCurrency(data.total);
+
+                if (data.discountAmount && data.discountAmount > 0) {
+                    discountRowEl.style.display = 'flex';
+                    discountEl.textContent = '- ' + formatCurrency(data.discountAmount);
+                } else {
+                    discountRowEl.style.display = 'none';
+                }
+
+                if (payload.couponCode) {
+                    if (data.appliedCoupon) {
+                        couponMessageEl.textContent = 'Đã áp dụng mã "' + data.appliedCoupon + '".';
+                        couponMessageEl.classList.add('text-success');
+                    } else {
+                        couponMessageEl.textContent = 'Mã giảm giá không áp dụng được.';
+                        couponMessageEl.classList.add('text-danger');
+                    }
+                }
+            } catch (err) {
+                console.error('calculate-total error', err);
+                errorEl.textContent = 'Có lỗi xảy ra, thử lại sau.';
+            }
+        }
+
+        if (addressSelect) addressSelect.addEventListener('change', refreshTotal);
+        if (couponCodeInput) {
+            couponCodeInput.addEventListener('input', function () {
+                clearTimeout(couponCodeInput._debounce);
+                couponCodeInput._debounce = setTimeout(refreshTotal, 500);
+            });
+        }
+
+        if (placeOrderForm) {
+            placeOrderForm.addEventListener('submit', function () {
+                hiddenAddressId.value = addressSelect ? addressSelect.value : '';
+                hiddenCouponCode.value = couponCodeInput.value ? couponCodeInput.value.trim() : '';
+            });
+        }
+
+        function getPayPalPayload() {
+            return {
+                addressId: addressSelect && addressSelect.value ? Number(addressSelect.value) : null,
+                couponCode: couponCodeInput.value ? couponCodeInput.value.trim() : null
+            };
+        }
+
+        function setPaymentMethodUi() {
+            var isPayPal = paymentMethodSelect && paymentMethodSelect.value === 'PayPal';
+            if (placeOrderBtn) placeOrderBtn.style.display = isPayPal ? 'none' : '';
+            if (paypalContainer) paypalContainer.style.display = isPayPal ? 'block' : 'none';
+            if (paypalError) paypalError.textContent = '';
+        }
+
+        if (paymentMethodSelect) {
+            paymentMethodSelect.addEventListener('change', setPaymentMethodUi);
+            setPaymentMethodUi();
+        }
+
+        if (window.paypal && paypalContainer) {
+            paypal.Buttons({
+                style: { layout: 'vertical', shape: 'rect', label: 'paypal' },
+                createOrder: function () {
+                    var payload = getPayPalPayload();
+                    if (!payload.addressId) {
+                        var error = 'Vui lòng chọn địa chỉ giao hàng.';
+                        paypalError.textContent = error;
+                        return Promise.reject(new Error(error));
+                    }
+
+                    paypalError.textContent = '';
+                    return fetch('/Checkout/CreatePayPalOrder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(async function (response) {
+                        var data = await response.json();
+                        if (!response.ok || !data.id) {
+                            throw new Error(data.message || 'Không thể tạo đơn PayPal.');
+                        }
+                        window.paypalLocalOrderId = data.orderId;
+                        return data.id;
+                    })
+                    .catch(function (error) {
+                        paypalError.textContent = error.message;
+                        throw error;
+                    });
+                },
+                onApprove: function (data) {
+                    return fetch('/Checkout/CapturePayPalOrder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            orderId: window.paypalLocalOrderId,
+                            paypalOrderId: data.orderID
+                        })
+                    })
+                    .then(async function (response) {
+                        var result = await response.json();
+                        if (!response.ok || result.paymentStatus !== 'Paid') {
+                            throw new Error(result.message || 'PayPal chưa hoàn tất thanh toán.');
+                        }
+                        window.location.href = '/Checkout/Confirmation?orderId=' + result.orderId;
+                    })
+                    .catch(function (error) {
+                        paypalError.textContent = error.message;
+                    });
+                },
+                onCancel: function () {
+                    paypalError.textContent = 'Bạn đã hủy thanh toán PayPal.';
+                },
+                onError: function (error) {
+                    console.error('PayPal error', error);
+                    paypalError.textContent = 'Có lỗi xảy ra với PayPal. Vui lòng thử lại.';
+                }
+            }).render('#paypal-button-container');
+        }
+
+        refreshTotal();
+    })();
+</script>

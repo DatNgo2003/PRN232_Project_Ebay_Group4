@@ -1,0 +1,574 @@
+﻿@model Frontend.Models.SellerSalesOrderDto
+@{
+    ViewData["Title"] = $"Order #{Model.OrderId} - Seller Detail";
+
+    var statusFlow = new[] { "Processing", "Shipped", "InTransit", "OutForDelivery", "Delivered" };
+    var currentStatus = Model.ShippingStatus ?? "Processing";
+    var currentIndex = Array.IndexOf(statusFlow, currentStatus);
+    var nextStatuses = new List<string>();
+    if (currentIndex >= 0 && currentIndex < statusFlow.Length - 1)
+    {
+        nextStatuses.Add(statusFlow[currentIndex + 1]);
+    }
+    if (currentStatus != "Delivered" && currentStatus != "Failed")
+    {
+        nextStatuses.Add("Failed");
+    }
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/purchase-history.css" asp-append-version="true" />
+    <style>
+        .detail-section {
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+            .detail-section h3 {
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #191919;
+                margin-bottom: 1rem;
+                padding-bottom: 0.5rem;
+                border-bottom: 1px solid #e5e5e5;
+            }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.4rem 0;
+        }
+
+        .detail-label {
+            color: #707070;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: #191919;
+        }
+
+        .status-update-form {
+            background: #f0f7ff;
+            border: 2px solid #3665f3;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+            .status-update-form h3 {
+                color: #3665f3;
+                border-bottom-color: #b3d0ff;
+            }
+
+        .item-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+            .item-row:last-child {
+                border-bottom: none;
+            }
+
+        .item-img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid #e5e5e5;
+        }
+
+        .item-info {
+            flex-grow: 1;
+        }
+
+            .item-info .title {
+                font-weight: 600;
+                color: #3665f3;
+            }
+
+            .item-info .meta {
+                font-size: 0.85rem;
+                color: #707070;
+            }
+
+        .item-price {
+            font-weight: 700;
+            color: #191919;
+            white-space: nowrap;
+        }
+
+        .carrier-badge {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .status-Processing {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .status-Shipped {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .status-InTransit {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .status-OutForDelivery {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status-Delivered {
+            background: #e8f5e9;
+            color: #1b5e20;
+        }
+
+        .status-Failed {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .btn-update-status {
+            background-color: #3665f3;
+            color: #fff;
+            border: none;
+            padding: 0.6rem 2rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+            .btn-update-status:hover {
+                background-color: #2952cc;
+            }
+
+        .btn-back {
+            color: #3665f3;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+            .btn-back:hover {
+                text-decoration: underline;
+            }
+
+        .next-status-hint {
+            background: #fffde7;
+            border: 1px solid #fbc02d;
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            margin-top: 0.75rem;
+            font-size: 0.9rem;
+            color: #5d4037;
+        }
+
+        .order-status-bar {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+            max-width: 700px;
+        }
+
+        .status-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+            color: #999;
+        }
+
+        .status-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #fff;
+            border: 2px solid #ccc;
+        }
+
+        .status-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .status-line {
+            flex-grow: 1;
+            height: 3px;
+            background-color: #ccc;
+            margin: 0 -2px;
+            position: relative;
+            bottom: 8px;
+        }
+
+        .status-node.active .status-dot {
+            background-color: #3665f3;
+            border-color: #3665f3;
+        }
+
+        .status-node.active .status-label {
+            color: #191919;
+        }
+
+        .status-line.active {
+            background-color: #3665f3;
+        }
+    </style>
+}
+
+<div class="container-fluid px-3 px-md-5 py-4">
+
+    @* Header *@
+    <div class="my-ebay-header">
+        <div class="my-ebay-title-nav">
+            <h1 class="my-ebay-title">My eBay</h1>
+            <ul class="my-ebay-subnav">
+                <li><a href="#">Activity</a></li>
+                <li><a href="#">Messages</a></li>
+                <li><a href="#">Account</a></li>
+            </ul>
+        </div>
+        <div class="my-ebay-user">
+            <a href="#">@Context.Session.GetString("Username")</a>
+        </div>
+    </div>
+
+    <div class="row gx-4">
+        @* Sidebar *@
+        <div class="col-12 col-md-3 col-lg-2">
+            <div class="my-ebay-sidebar">
+                <ul class="sidebar-nav list-unstyled">
+                    <li><a asp-action="Index" asp-controller="Home">Summary</a></li>
+                    <li><a href="#">Recently Viewed</a></li>
+                    <li><a href="#">Watchlist</a></li>
+                    <li><a asp-action="Index" asp-controller="Purchase">Purchases</a></li>
+                    <li class="sidebar-section-divider"></li>
+                    <li><a asp-action="Index" asp-controller="Sales" class="active">Selling / My Sales</a></li>
+                </ul>
+            </div>
+        </div>
+
+        @* Main content *@
+        <div class="col-12 col-md-9 col-lg-10">
+            <div class="purchase-history-content">
+
+                @* Back link *@
+                <div class="mb-3">
+                    <a asp-action="Index" asp-controller="Sales" class="btn-back">← Back to My Sales</a>
+                </div>
+
+                <h2 class="purchase-title mb-4">Order #@Model.OrderId Detail</h2>
+
+                @* TempData messages *@
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        @TempData["SuccessMessage"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                }
+                @if (TempData["Error"] != null)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        @TempData["Error"]
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                }
+
+                @* ===== STATUS BAR ===== *@
+                <div class="detail-section">
+                    <h3>Order Status</h3>
+                    <div class="order-status-bar">
+                        <div class="status-node @(Model.OrderStatus == "Paid" || currentStatus == "Processing" ||
+                               currentStatus == "Shipped" || currentStatus == "InTransit" || currentStatus == "OutForDelivery" || currentStatus ==
+                               "Delivered" || Model.OrderStatus == "Completed" ? "active" : "")">
+                            <div class="status-dot"></div>
+                            <span class="status-label">PAID</span>
+                        </div>
+                        <div class="status-line @(currentStatus == "Processing" || currentStatus == "Shipped" ||
+                               currentStatus == "InTransit" || currentStatus == "OutForDelivery" || currentStatus == "Delivered" || Model.OrderStatus
+                               == "Completed" ? "active" : "")"></div>
+                        <div class="status-node @(currentStatus == "Processing" || currentStatus == "Shipped" ||
+                               currentStatus == "InTransit" || currentStatus == "OutForDelivery" || currentStatus == "Delivered" || Model.OrderStatus
+                               == "Completed" ? "active" : "")">
+                            <div class="status-dot"></div>
+                            <span class="status-label">PROCESSING</span>
+                        </div>
+                        <div class="status-line @(currentStatus == "Shipped" || currentStatus == "InTransit" ||
+                               currentStatus == "OutForDelivery" || currentStatus == "Delivered" || Model.OrderStatus == "Completed" ? "active" :
+                               "")"></div>
+                        <div class="status-node @(currentStatus == "Shipped" || currentStatus == "InTransit" ||
+                               currentStatus == "OutForDelivery" || currentStatus == "Delivered" || Model.OrderStatus == "Completed" ? "active" :
+                               "")">
+                            <div class="status-dot"></div>
+                            <span class="status-label">SHIPPED</span>
+                        </div>
+                        <div class="status-line @(currentStatus == "InTransit" || currentStatus == "OutForDelivery" ||
+                               currentStatus == "Delivered" || Model.OrderStatus == "Completed" ? "active" : "")"></div>
+                        <div class="status-node @(currentStatus == "InTransit" || currentStatus == "OutForDelivery" ||
+                               currentStatus == "Delivered" || Model.OrderStatus == "Completed" ? "active" : "")">
+                            <div class="status-dot"></div>
+                            <span class="status-label">IN TRANSIT</span>
+                        </div>
+                        <div class="status-line @(currentStatus == "OutForDelivery" || currentStatus == "Delivered" ||
+                               Model.OrderStatus == "Completed" ? "active" : "")"></div>
+                        <div class="status-node @(currentStatus == "OutForDelivery" || currentStatus == "Delivered" ||
+                               Model.OrderStatus == "Completed" ? "active" : "")">
+                            <div class="status-dot"></div>
+                            <span class="status-label">OUT FOR DELIVERY</span>
+                        </div>
+                        <div class="status-line @(currentStatus == "Delivered" || Model.OrderStatus == "Completed" ?
+                               "active" : "")"></div>
+                        <div class="status-node @(currentStatus == "Delivered" || Model.OrderStatus == "Completed" ?
+                               "active" : "")">
+                            <div class="status-dot"></div>
+                            <span class="status-label">DELIVERED</span>
+                        </div>
+                    </div>
+                </div>
+
+                @* ===== UPDATE SHIPPING STATUS ===== *@
+                @if (currentStatus != "Delivered" && currentStatus != "Failed")
+                {
+                    <div class="status-update-form">
+                        <h3>📦 Update Shipping Status</h3>
+                        <form asp-action="UpdateShippingStatus" asp-controller="Sales" method="post">
+                            <input type="hidden" name="orderId" value="@Model.OrderId" />
+                            <div class="row align-items-end">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Select next status:</label>
+                                    <select name="status" class="form-select mb-2">
+                                        @foreach (var s in nextStatuses)
+                                        {
+                                            <option value="@s">@s</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <button type="submit" class="btn btn-update-status"
+                                            onclick="return confirm('Are you sure you want to update shipping
+      status?')">
+                                        Update Status
+                                    </button>
+                                </div>
+                            </div>
+                            @if (nextStatuses.Any())
+                            {
+                                <div class="next-status-hint">
+                                    💡 Next step: <strong>@nextStatuses.First()</strong>
+                                    @if (nextStatuses.First() == "Shipped")
+                                    {
+                                        <span> — Mark the order as shipped so the buyer can track it.</span>
+                                    }
+                                    else if (nextStatuses.First() == "InTransit")
+                                    {
+                                        <span> — The package is on its way to the buyer.</span>
+                                    }
+                                    else if (nextStatuses.First() == "OutForDelivery")
+                                    {
+                                        <span> — The carrier is out for final delivery today.</span>
+                                    }
+                                    else if (nextStatuses.First() == "Delivered")
+                                    {
+                                        <span> — Confirm the package has been delivered to the buyer.</span>
+                                    }
+                                </div>
+                            }
+                        </form>
+                    </div>
+                }
+                else
+                {
+                    <div class="detail-section">
+                        <h3>📦 Shipping Status</h3>
+                        <p class="mb-0">
+                            This order has been <strong>@currentStatus</strong>.
+                            @if (currentStatus == "Delivered")
+                            {
+                                <span> The buyer can now leave feedback.</span>
+                            }
+                            else if (currentStatus == "Failed")
+                            {
+                                <span> The delivery has failed. Please contact the buyer.</span>
+                            }
+                        </p>
+                    </div>
+                }
+
+                @* ===== ORDER INFO + BUYER INFO ===== *@
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="detail-section">
+                            <h3>Order Information</h3>
+                            <div class="detail-row">
+                                <span class="detail-label">Order ID</span>
+                                <span class="detail-value">#@Model.OrderId</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Order Date</span>
+                                <span class="detail-value">
+                                    @(Model.OrderDate?.ToString("dd-MMM-yyyy HH:mm") ??
+                                                                        "N/A")
+                                </span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Order Status</span>
+                                <span class="detail-value">@(Model.OrderStatus ?? "N/A")</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Total Price</span>
+                                <span class="detail-value">
+                                    US $@(Model.OrderTotalPrice?.ToString("#,##0.00") ??
+                                                                        "0.00")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="detail-section">
+                            <h3>Buyer Information</h3>
+                            <div class="detail-row">
+                                <span class="detail-label">Buyer</span>
+                                <span class="detail-value">@(Model.BuyerUsername ?? "Unknown")</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Buyer ID</span>
+                                <span class="detail-value">@Model.BuyerId</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Feedback</span>
+                                <span class="detail-value">
+                                    @if (Model.HasBuyerFeedback)
+                                    {
+                                        <span>@Model.BuyerFeedbackRating?.ToString("0.0") ★</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No feedback yet</span>
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* ===== SHIPPING DETAILS ===== *@
+                <div class="detail-section">
+                    <h3>Shipping Details</h3>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="detail-row">
+                                <span class="detail-label">Carrier</span>
+                                <span class="detail-value">
+                                    @if (!string.IsNullOrWhiteSpace(Model.ShippingCarrier))
+                                    {
+                                        <span class="carrier-badge">@Model.ShippingCarrier</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Not assigned</span>
+                                    }
+                                </span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Tracking Number</span>
+                                <span class="detail-value">@(Model.TrackingNumber ?? "N/A")</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="detail-row">
+                                <span class="detail-label">Shipping Status</span>
+                                <span class="detail-value">
+                                    <span class="status-badge status-@(Model.ShippingStatus ??
+                                            "Processing")">@(Model.ShippingStatus ?? "Processing")</span>
+                                </span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Estimated Arrival</span>
+                                <span class="detail-value">
+                                    @(Model.EstimatedArrival?.ToString("dd-MMM-yyyy") ??
+                                                                        "N/A")
+                                </span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Shipping Fee</span>
+                                <span class="detail-value">
+                                    US $@(Model.ShippingFee?.ToString("#,##0.00") ??
+                                                                        "0.00")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(Model.ShippingCity) ||
+                                        !string.IsNullOrWhiteSpace(Model.ShippingCountry))
+                    {
+                        <hr />
+                        <div class="detail-row">
+                            <span class="detail-label">Destination</span>
+                            <span class="detail-value">
+                                @(Model.ShippingCity ?? "N/A"), @(Model.ShippingCountry ??
+                                "N/A")
+                        </span>
+                    </div>
+                                        }
+                </div>
+
+                @* ===== ITEMS ===== *@
+                <div class="detail-section">
+                    <h3>Items in this Order (@(Model.Items?.Count ?? 0) item(s))</h3>
+                    @if (Model.Items != null)
+                    {
+                        @foreach (var item in Model.Items)
+                        {
+                            <div class="item-row">
+                                <img src="https://placehold.co/60x60?text=P@(item.ProductId)" alt="@item.ProductTitle"
+                                     class="item-img" />
+                                <div class="item-info">
+                                    <div class="title">@item.ProductTitle</div>
+                                    <div class="meta">Qty: @item.Quantity | Item ID: @item.ProductId</div>
+                                </div>
+                                <div class="item-price">US $@((item.UnitPrice ?? 0).ToString("#,##0.00"))</div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                @* ===== ACTION BUTTONS ===== *@
+                <div class="d-flex justify-content-between mt-3 mb-4">
+                    <a asp-action="Index" asp-controller="Sales" class="btn-back">← Back to My Sales</a>
+                    <a asp-controller="SellerReviews" asp-action="LeaveReview" asp-route-orderId="@Model.OrderId"
+                       class="btn btn-outline-primary" style="border-radius:20px; font-weight:600;">
+                        Review this buyer
+                    </a>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>

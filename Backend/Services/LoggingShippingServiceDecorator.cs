@@ -1,11 +1,10 @@
-﻿using Backend.Models;
+using Backend.Models;
+using Backend.Services.Shipping;
 
 namespace Backend.Services;
 
 /// <summary>
-/// Decorator (plug-in) bọc quanh BẤT KỲ IShippingService nào (Mock hiện tại,
-/// hoặc carrier thật sau này) để thêm log transaction + lỗi giao tiếp module,
-/// mà không cần sửa MockShippingService hay implementation thật.
+/// Decorator bọc quanh BẤT KỲ IShippingService nào để thêm log transaction + lỗi giao tiếp module.
 /// </summary>
 public sealed class LoggingShippingServiceDecorator : IShippingService
 {
@@ -22,21 +21,21 @@ public sealed class LoggingShippingServiceDecorator : IShippingService
         Address destination,
         DateTime estimatedArrival,
         string orderReference,
+        string? carrierKey = null,
         CancellationToken cancellationToken = default)
     {
         var txId = _txLogger.StartTransaction("Shipping", "CreateShipment",
-            new { orderReference, destination.City, destination.Country });
+            new { orderReference, destination.City, destination.Country, Carrier = carrierKey ?? "default" });
 
         try
         {
-            var result = await _inner.CreateShipmentAsync(destination, estimatedArrival, orderReference, cancellationToken);
+            var result = await _inner.CreateShipmentAsync(destination, estimatedArrival, orderReference, carrierKey, cancellationToken);
             _txLogger.LogSuccess(txId, "Shipping", "CreateShipment",
                 new { result.TrackingNumber, result.Carrier, result.Status });
             return result;
         }
         catch (Exception ex)
         {
-            // Lỗi giao tiếp giữa module Order và module Shipping (carrier API)
             _txLogger.LogInterModuleError(txId, "Order", "Shipping", "CreateShipment", ex);
             throw;
         }
@@ -57,7 +56,7 @@ public sealed class LoggingShippingServiceDecorator : IShippingService
                 _txLogger.LogSuccess(txId, "Shipping", "UpdateStatus", new { trackingNumber, status });
             else
                 _txLogger.LogFailure(txId, "Shipping", "UpdateStatus",
-                    new InvalidOperationException("Carrier từ chối cập nhật (tracking number/status không hợp lệ)."),
+                    new InvalidOperationException("Carrier tu choi cap nhat (tracking number/status khong hop le)."),
                     new { trackingNumber, status });
 
             return ok;
@@ -67,5 +66,15 @@ public sealed class LoggingShippingServiceDecorator : IShippingService
             _txLogger.LogInterModuleError(txId, "Order", "Shipping", "UpdateStatus", ex);
             throw;
         }
+    }
+
+    public IReadOnlyList<ShippingCarrierInfo> GetAvailableCarriers()
+    {
+        return _inner.GetAvailableCarriers();
+    }
+
+    public decimal EstimateFee(Address destination, decimal orderTotal, string carrierKey)
+    {
+        return _inner.EstimateFee(destination, orderTotal, carrierKey);
     }
 }

@@ -3,6 +3,18 @@
     var username = HttpContextAccessor.HttpContext.Session.GetString("Username");
     var userId = HttpContextAccessor.HttpContext.Session.GetString("UserId");
     var role = HttpContextAccessor.HttpContext.Session.GetString("Role");
+
+    var cartJson = HttpContextAccessor.HttpContext.Session.GetString("Cart");
+    var cartCount = 0;
+    if (!string.IsNullOrEmpty(cartJson))
+    {
+        try
+        {
+            var cartItems = System.Text.Json.JsonSerializer.Deserialize<List<CartItemModel>>(cartJson);
+            cartCount = cartItems?.Sum(i => i.Quantity) ?? 0;
+        }
+        catch { }
+    }
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -90,7 +102,7 @@
                         </div>
 
                         <a href="#">🔔</a>
-                        <a href="#">🛒</a>
+                        <a href="/Cart/Index">🛒 @(cartCount > 0 ? $"({cartCount})" : "")</a>
                     </div>
                 </div>
             </div>

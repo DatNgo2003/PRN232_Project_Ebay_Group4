@@ -3,6 +3,7 @@ using Backend.Models;
 using Backend.ProgramConfig;
 using Backend.Services;
 using Backend.Services.PaymentGateways;
+using Backend.Services.Shipping;
 using Backend.Configuration;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -47,14 +48,17 @@ builder.Services.AddScoped<IShippingFeeCalculator, Backend.Services.Implementati
 // === Transaction logging (dùng chung cho Payment + Shipping) ===
 builder.Services.AddSingleton<ITransactionLogger, TransactionLogger>();
 builder.Services.AddScoped<IWebhookReplayGuard, DbWebhookReplayGuard>();
-// === Shipping: plug-in qua decorator ===
-// MockShippingService là carrier giả lập hiện tại. Muốn đổi sang carrier thật,
-// chỉ cần viết class mới implement IShippingService và đổi dòng
-// AddSingleton<MockShippingService>() bên dưới — LoggingShippingServiceDecorator
-// và toàn bộ OrderService/Controller không cần sửa gì thêm.
-builder.Services.AddSingleton<MockShippingService>();
+// === Shipping: multi-carrier plug-in qua factory ===
+// Đăng ký 3 carrier: GHTK, Viettel Post, J&T Express
+builder.Services.AddSingleton<IShippingCarrierService, GhtkCarrierService>();
+builder.Services.AddSingleton<IShippingCarrierService, ViettelPostCarrierService>();
+builder.Services.AddSingleton<IShippingCarrierService, JntExpressCarrierService>();
+builder.Services.AddSingleton<IShippingCarrierFactory, ShippingCarrierFactory>();
+
+// DefaultShippingService dùng carrier factory, bọc bởi LoggingShippingServiceDecorator
+builder.Services.AddSingleton<DefaultShippingService>();
 builder.Services.AddSingleton<IShippingService>(sp => new LoggingShippingServiceDecorator(
-    sp.GetRequiredService<MockShippingService>(),
+    sp.GetRequiredService<DefaultShippingService>(),
     sp.GetRequiredService<ITransactionLogger>()));
 
 // === Payment gateways: plug-in qua factory ===

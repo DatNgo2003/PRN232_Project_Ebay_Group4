@@ -18,5 +18,16 @@ namespace Frontend.Models
         public decimal? BuyerFeedbackRating { get; set; }
 
         public List<SellerSalesItemDto> Items { get; set; } = new List<SellerSalesItemDto>();
+
+        // Shipping information
+        public string? ShippingCarrier { get; set; }
+        public string? TrackingNumber { get; set; }
+        public string? ShippingStatus { get; set; }
+        public DateTime? EstimatedArrival { get; set; }
+        public decimal? ShippingFee { get; set; }
+
+        // Address info
+        public string? ShippingCity { get; set; }
+        public string? ShippingCountry { get; set; }
     }
 }

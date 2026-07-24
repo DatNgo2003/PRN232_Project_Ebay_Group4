@@ -1,3 +1,4 @@
+﻿using Backend.DTOs.Requests;
 using Backend.DTOs.Responses;
 
 namespace Backend.Services
@@ -8,9 +9,18 @@ namespace Backend.Services
             string buyerUsername,
             int productId,
             string? paymentMethod,
-            int? addressId,              
+            int? addressId,
             int quantity = 1,
-            string? couponCode = null);
+            string? couponCode = null,
+            string? carrierKey = null);
+
+        Task<CartCheckoutResponseDto?> CreateCartOrderAsync(
+            string buyerUsername,
+            List<OrderItemRequestDto> items,
+            string? paymentMethod,
+            int? addressId,
+            string? couponCode = null,
+            string? carrierKey = null);
 
         Task<IEnumerable<PurchaseHistoryItemDto>> GetPurchaseHistoryAsync(string buyerUsername);
 
