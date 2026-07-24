@@ -1,4 +1,5 @@
 using Backend.Models;
+using Backend.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Repositories
@@ -20,71 +21,104 @@ namespace Backend.Repositories
             string paymentMethod,
             string paymentStatus,
             string orderStatus,
-            int addressId,              
+            int addressId,
+            string shippingCarrier,
+            string shippingStatus,
             string trackingNumber,
             DateTime estimatedArrival,
             int quantity,
             decimal subTotal,
             decimal discountAmount,
             decimal totalAmount,
-            int? couponId)
+            int? couponId,
+            bool confirmInventoryImmediately)
         {
-            var newOrder = new OrderTable
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                BuyerId = buyerId,
-                AddressId = addressId,       
-                OrderDate = DateTime.UtcNow,
-                TotalPrice = totalAmount,
-                Status = orderStatus,
+                await using var transaction = await _context.Database.BeginTransactionAsync();
 
-                SubTotal = subTotal,
-                ShippingFee = shippingFee,
-                DiscountAmount = discountAmount,
-                CouponId = couponId
-            };
+                var reservedRows = await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE [Inventory]
+                SET [quantity] = [quantity] - {quantity},
+                    [lastUpdated] = {DateTime.UtcNow}
+                WHERE [productId] = {productId}
+                  AND ISNULL([quantity], 0) >= {quantity};");
 
-            _context.OrderTables.Add(newOrder);
+                if (reservedRows != 1)
+                {
+                    await transaction.RollbackAsync();
+                    throw new BusinessException(
+                        "Sản phẩm đã hết hàng hoặc số lượng còn lại không đủ. Vui lòng tải lại trang và thử lại.");
+                }
 
-            var newOrderItem = new OrderItem
-            {
-                Order = newOrder,
-                ProductId = productId,
-                Quantity = quantity,
-                UnitPrice = unitPrice
-            };
+                var newOrder = new OrderTable
+                {
+                    BuyerId = buyerId,
+                    AddressId = addressId,
+                    OrderDate = DateTime.UtcNow,
+                    TotalPrice = totalAmount,
+                    Status = orderStatus,
 
-            _context.OrderItems.Add(newOrderItem);
+                    SubTotal = subTotal,
+                    ShippingFee = shippingFee,
+                    DiscountAmount = discountAmount,
+                    CouponId = couponId
+                };
 
-            var payment = new Payment
-            {
-                Order = newOrder,
-                UserId = buyerId,
-                Amount = totalAmount,
-                Method = paymentMethod,
-                Status = paymentStatus,
-                PaidAt = paymentStatus == "Paid" ? DateTime.UtcNow : null
-            };
+                _context.OrderTables.Add(newOrder);
 
-            _context.Payments.Add(payment);
+                var newOrderItem = new OrderItem
+                {
+                    Order = newOrder,
+                    ProductId = productId,
+                    Quantity = quantity,
+                    UnitPrice = unitPrice
+                };
 
-            var address = await _context.Addresses.FirstOrDefaultAsync(a => a.Id == addressId);
-            var carrierLabel = address != null
-                ? $"MockExpress - {address.City ?? address.Country ?? "N/A"}"
-                : "MockExpress";
+                _context.OrderItems.Add(newOrderItem);
 
-            var shippingInfo = new ShippingInfo
-            {
-                Order = newOrder,
-                Carrier = carrierLabel,
-                TrackingNumber = trackingNumber,
-                Status = "Preparing",
-                EstimatedArrival = estimatedArrival
-            };
+                var payment = new Payment
+                {
+                    Order = newOrder,
+                    UserId = buyerId,
+                    Amount = totalAmount,
+                    Method = paymentMethod,
+                    Status = paymentStatus,
+                    PaidAt = paymentStatus == "Paid" ? DateTime.UtcNow : null
+                };
 
-            _context.ShippingInfos.Add(shippingInfo);
+                _context.Payments.Add(payment);
 
-            await _context.SaveChangesAsync();
-            return newOrder;
+                var shippingInfo = new ShippingInfo
+                {
+                    Order = newOrder,
+                    Carrier = shippingCarrier,
+                    TrackingNumber = trackingNumber,
+                    Status = shippingStatus,
+                    EstimatedArrival = estimatedArrival
+                };
+
+                _context.ShippingInfos.Add(shippingInfo);
+
+                var reservation = new InventoryReservation
+                {
+                    Order = newOrder,
+                    ProductId = productId,
+                    Quantity = quantity,
+                    Status = confirmInventoryImmediately
+                        ? InventoryReservationStatus.Confirmed
+                        : InventoryReservationStatus.Held,
+                    CreatedAt = DateTime.UtcNow,
+                    ConfirmedAt = confirmInventoryImmediately ? DateTime.UtcNow : null
+                };
+
+                _context.InventoryReservations.Add(reservation);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return newOrder;
+            });
         }
 
         public async Task<IEnumerable<OrderItem>> GetPurchaseHistoryAsync(int buyerId)
@@ -102,7 +136,8 @@ namespace Backend.Repositories
                     .ThenInclude(o => o.Payments)
                 .Include(oi => oi.Order)
                     .ThenInclude(o => o.ShippingInfos)
-                .Where(oi => oi.Order.BuyerId == buyerId)
+                .Where(oi => oi.Order.BuyerId == buyerId
+                    && oi.Order.Status != "Cancelled")
                 .OrderByDescending(oi => oi.Order.OrderDate)
                 .ToListAsync();
         }
@@ -166,26 +201,115 @@ namespace Backend.Repositories
                 .Where(o =>
                     o.Status == "Pending" &&
                     o.OrderDate < cutoffTime &&
-                    o.Payments.Any(p => p.Status == "Pending"))
+                    o.Payments.Any(p => p.Status == "Pending" && p.Method == "PayPal"))
                 .ToListAsync();
         }
 
         public async Task CancelOrderAsync(int orderId)
         {
-            var order = await _context.OrderTables
-                .Include(o => o.Payments)
-                .FirstOrDefaultAsync(o => o.Id == orderId);
-
-            if (order == null) return;
-
-            order.Status = "Cancelled";
-
-            foreach (var payment in order.Payments.Where(p => p.Status == "Pending"))
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                payment.Status = "Cancelled";
-            }
+                await using var transaction = await _context.Database.BeginTransactionAsync();
 
-            await _context.SaveChangesAsync();
+                var order = await _context.OrderTables
+                    .Include(o => o.Payments)
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
+
+                if (order == null)
+                {
+                    await transaction.RollbackAsync();
+                    return;
+                }
+
+                if (order.Payments.Any(p => p.Status == "Paid"))
+                {
+                    await transaction.RollbackAsync();
+                    return;
+                }
+
+                order.Status = "Cancelled";
+
+                foreach (var payment in order.Payments.Where(p => p.Status == "Pending"))
+                {
+                    payment.Status = "Cancelled";
+                }
+
+                await ReleaseHeldReservationsAsync(order.Id);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
+        }
+
+        public async Task<bool> FailPayPalPaymentAsync(
+            int orderId,
+            int buyerId,
+            string paypalOrderId,
+            string failureStatus)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+
+                var order = await _context.OrderTables
+                    .Include(o => o.Payments)
+                    .FirstOrDefaultAsync(o =>
+                        o.Id == orderId &&
+                        o.BuyerId == buyerId);
+
+                var payment = order?.Payments
+                    .OrderByDescending(p => p.Id)
+                    .FirstOrDefault(p =>
+                        p.Method == "PayPal" &&
+                        p.PayPalOrderId == paypalOrderId);
+
+                if (order == null || payment == null || payment.Status == "Paid")
+                {
+                    await transaction.RollbackAsync();
+                    return false;
+                }
+
+                payment.Status = "Failed";
+                order.Status = "Failed";
+
+                await ReleaseHeldReservationsAsync(order.Id);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return true;
+            });
+        }
+
+        private async Task ReleaseHeldReservationsAsync(int orderId)
+        {
+            var releasedAt = DateTime.UtcNow;
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                DECLARE @Released TABLE
+                (
+                    [productId] int NOT NULL,
+                    [quantity] int NOT NULL
+                );
+
+                UPDATE [InventoryReservation]
+                SET [status] = {InventoryReservationStatus.Released},
+                    [releasedAt] = {releasedAt}
+                OUTPUT inserted.[productId], inserted.[quantity]
+                    INTO @Released ([productId], [quantity])
+                WHERE [orderId] = {orderId}
+                  AND [status] = {InventoryReservationStatus.Held};
+
+                UPDATE inventory
+                SET inventory.[quantity] = ISNULL(inventory.[quantity], 0) + released.[quantity],
+                    inventory.[lastUpdated] = {releasedAt}
+                FROM [Inventory] AS inventory
+                INNER JOIN
+                (
+                    SELECT [productId], SUM([quantity]) AS [quantity]
+                    FROM @Released
+                    GROUP BY [productId]
+                ) AS released
+                    ON released.[productId] = inventory.[productId];");
         }
     }
 }

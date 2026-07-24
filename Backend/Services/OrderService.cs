@@ -20,7 +20,6 @@ namespace Backend.Services
         private readonly CloneEbayDbContext _context;                   // >>> THÊM: để lookup Address 
         private readonly IShippingService _shippingService;
         private readonly IPaymentGatewayFactory? _paymentGatewayFactory; // >>> MỚI: plug-in cổng thanh toán 
-        private readonly IShippingTaskQueue? _shippingTaskQueue;         // >>> MỚI: decoupled shipping queue
 
         public OrderService(
             IOrderRepository orderRepository,
@@ -31,8 +30,7 @@ namespace Backend.Services
             IShippingFeeCalculator shippingFeeCalculator, // >>> THÊM 
             CloneEbayDbContext context,                    // >>> THÊM 
             IShippingService? shippingService = null,
-            IPaymentGatewayFactory? paymentGatewayFactory = null, // >>> MỚI 
-            IShippingTaskQueue? shippingTaskQueue = null           // >>> MỚI 
+            IPaymentGatewayFactory? paymentGatewayFactory = null // >>> MỚI 
         )
         {
             _orderRepository = orderRepository;
@@ -46,7 +44,6 @@ namespace Backend.Services
             // while production DI supplies the singleton provider.
             _shippingService = shippingService ?? new MockShippingService();
             _paymentGatewayFactory = paymentGatewayFactory;
-            _shippingTaskQueue = shippingTaskQueue;
         }
 
         private async Task<User?> GetUserFromUsername(string username)
@@ -97,7 +94,6 @@ namespace Backend.Services
                 appliedCouponCode = coupon.Code;
                 appliedCouponId = coupon.Id;
 
-                await _couponRepository.IncrementUsedCountAsync(coupon.Id);
             }
 
             var totalAmount = Math.Max(0, subTotal - discountAmount + shippingFee);
@@ -121,11 +117,10 @@ namespace Backend.Services
             var paymentStatus = "Pending";
             var orderStatus = "Pending";
             var estimatedArrival = DateTime.UtcNow.AddDays(GetEstimatedDeliveryDays(address));
-            
-            // Decoupled Shipping: Create initial order with pending tracking status immediately (< 2s)
-            // and push shipping creation task to the Background Worker Channel.
-            var initialTrackingNumber = $"PENDING-{user.Id}-{productId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
-            var initialShippingStatus = "Preparing";
+            var shipment = await _shippingService.CreateShipmentAsync(
+                address,
+                estimatedArrival,
+                $"{user.Id}-{productId}");
 
             var order = await _orderRepository.CreateSimpleOrderAsync(
                 user.Id,
@@ -135,26 +130,21 @@ namespace Backend.Services
                 normalizedPaymentMethod,
                 paymentStatus,
                 orderStatus,
-                address.Id,          // >>> SỬA: truyền addressId thay vì region string 
-                initialTrackingNumber,
+                address.Id,          // >>> SỬA: truyền addressId thay vì region string
+                shipment.Carrier,
+                shipment.Status,
+                shipment.TrackingNumber,
                 estimatedArrival,
                 quantity,
                 subTotal,
                 discountAmount,
                 totalAmount,
-                appliedCouponId);
+                appliedCouponId,
+                confirmInventoryImmediately: normalizedPaymentMethod == "COD");
 
-            // Push shipping task to bounded channel queue for asynchronous worker execution
-            if (_shippingTaskQueue != null)
+            if (appliedCouponId.HasValue)
             {
-                var txId = $"TXN-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}[..8]";
-                await _shippingTaskQueue.QueueShippingTaskAsync(new DTOs.ShippingTaskMessage(
-                    order.Id,
-                    address.Id,
-                    user.Id,
-                    productId,
-                    txId,
-                    estimatedArrival));
+                await _couponRepository.IncrementUsedCountAsync(appliedCouponId.Value);
             }
 
             return new QuickBuyCheckoutResponseDto
@@ -169,8 +159,8 @@ namespace Backend.Services
                 AddressId = address.Id,
                 ShippingDestination = $"{address.City ?? "N/A"}, {address.Country ?? "N/A"}",
 
-                TrackingNumber = initialTrackingNumber,
-                ShippingStatus = initialShippingStatus,
+                TrackingNumber = shipment.TrackingNumber,
+                ShippingStatus = shipment.Status,
                 EstimatedArrival = estimatedArrival,
 
                 Quantity = quantity,
@@ -234,62 +224,123 @@ namespace Backend.Services
             var user = await GetUserFromUsername(buyerUsername);
             if (user == null) return null;
 
-            var order = await _context.OrderTables
-                .Include(o => o.Buyer)
-                .Include(o => o.Payments)
-                .Include(o => o.ShippingInfos)
-                .Include(o => o.OrderItems)
-                    .ThenInclude(oi => oi.Product)
-                .FirstOrDefaultAsync(o => o.Id == orderId && o.BuyerId == user.Id);
+            var strategy = _context.Database.CreateExecutionStrategy();
+            PaymentConfirmationNotification? notification = null;
 
-            var payment = order?.Payments
-                .OrderByDescending(p => p.Id)
-                .FirstOrDefault(p => p.Method == "PayPal" && p.PayPalOrderId == paypalOrderId);
-
-            if (order == null || payment == null) return null;
-
-            if (order.TotalPrice == null ||
-                order.TotalPrice.Value != capturedAmount ||
-                !string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase))
+            var result = await strategy.ExecuteAsync<PayPalPaymentCompletionResultDto?>(async () =>
             {
-                throw new BusinessException("Số tiền hoặc loại tiền PayPal không khớp với đơn hàng.");
-            }
+                notification = null;
+                await using var transaction = await _context.Database.BeginTransactionAsync();
 
-            if (payment.Status != "Paid")
-            {
-                payment.Status = "Paid";
-                payment.PaidAt = DateTime.UtcNow;
-                payment.PayPalCaptureId = paypalCaptureId;
-                order.Status = "Paid";
-                await _context.SaveChangesAsync();
+                var order = await _context.OrderTables
+                    .Include(o => o.Buyer)
+                    .Include(o => o.Payments)
+                    .Include(o => o.ShippingInfos)
+                    .Include(o => o.InventoryReservations)
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(oi => oi.Product)
+                    .FirstOrDefaultAsync(o => o.Id == orderId && o.BuyerId == user.Id);
 
-                if (!string.IsNullOrWhiteSpace(order.Buyer?.Email))
+                var payment = order?.Payments
+                    .OrderByDescending(p => p.Id)
+                    .FirstOrDefault(p => p.Method == "PayPal" && p.PayPalOrderId == paypalOrderId);
+
+                if (order == null || payment == null) return null;
+
+                if (order.TotalPrice == null ||
+                    order.TotalPrice.Value != capturedAmount ||
+                    !string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase))
                 {
-                    await _emailService.SendPaymentConfirmationEmailAsync(
-                        toEmail: order.Buyer.Email,
-                        buyerName: order.Buyer.Username ?? order.Buyer.Email,
-                        orderId: order.Id,
-                        totalAmount: order.TotalPrice ?? 0,
-                        paymentMethod: "PayPal",
-                        trackingNumber: order.ShippingInfos.FirstOrDefault()?.TrackingNumber,
-                        productNames: order.OrderItems.Select(oi => oi.Product?.Title ?? "(Sản phẩm không xác định)"));
+                    throw new BusinessException("Số tiền hoặc loại tiền PayPal không khớp với đơn hàng.");
                 }
+
+                if (payment.Status != "Paid")
+                {
+                    if (order.InventoryReservations.Any(r =>
+                        r.Status == InventoryReservationStatus.Released))
+                    {
+                        throw new BusinessException(
+                            "Giữ hàng cho đơn này đã hết hạn. Không thể hoàn tất thanh toán.");
+                    }
+
+                    payment.Status = "Paid";
+                    payment.PaidAt = DateTime.UtcNow;
+                    payment.PayPalCaptureId = paypalCaptureId;
+                    order.Status = "Paid";
+
+                    foreach (var reservation in order.InventoryReservations.Where(r =>
+                        r.Status == InventoryReservationStatus.Held))
+                    {
+                        reservation.Status = InventoryReservationStatus.Confirmed;
+                        reservation.ConfirmedAt = DateTime.UtcNow;
+                    }
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    if (!string.IsNullOrWhiteSpace(order.Buyer?.Email))
+                    {
+                        notification = new PaymentConfirmationNotification(
+                            order.Buyer.Email,
+                            order.Buyer.Username ?? order.Buyer.Email,
+                            order.Id,
+                            order.TotalPrice ?? 0,
+                            order.ShippingInfos.FirstOrDefault()?.TrackingNumber,
+                            order.OrderItems
+                                .Select(oi => oi.Product?.Title ?? "(Sản phẩm không xác định)")
+                                .ToArray());
+                    }
+                }
+                else
+                {
+                    await transaction.RollbackAsync();
+                }
+
+                return new PayPalPaymentCompletionResultDto
+                {
+                    OrderId = order.Id,
+                    PayPalOrderId = paypalOrderId,
+                    PayPalCaptureId = paypalCaptureId,
+                    PaymentStatus = payment.Status ?? "Paid",
+                    TotalAmount = order.TotalPrice ?? 0,
+                    Currency = currency
+                };
+            });
+
+            if (notification != null)
+            {
+                await _emailService.SendPaymentConfirmationEmailAsync(
+                    toEmail: notification.ToEmail,
+                    buyerName: notification.BuyerName,
+                    orderId: notification.OrderId,
+                    totalAmount: notification.TotalAmount,
+                    paymentMethod: "PayPal",
+                    trackingNumber: notification.TrackingNumber,
+                    productNames: notification.ProductNames);
             }
 
-            return new PayPalPaymentCompletionResultDto
-            {
-                OrderId = order.Id,
-                PayPalOrderId = paypalOrderId,
-                PayPalCaptureId = paypalCaptureId,
-                PaymentStatus = payment.Status ?? "Paid",
-                TotalAmount = order.TotalPrice ?? 0,
-                Currency = currency
-            };
+            return result;
         }
 
         public async Task CancelOrderAsync(int orderId)
         {
             await _orderRepository.CancelOrderAsync(orderId);
+        }
+
+        public async Task<bool> FailPayPalPaymentAsync(
+            string buyerUsername,
+            int orderId,
+            string paypalOrderId,
+            string failureStatus)
+        {
+            var user = await GetUserFromUsername(buyerUsername);
+            if (user == null) return false;
+
+            return await _orderRepository.FailPayPalPaymentAsync(
+                orderId,
+                user.Id,
+                paypalOrderId,
+                failureStatus);
         }
 
         private void ValidateCoupon(Coupon? coupon, int productId)
@@ -342,6 +393,14 @@ namespace Backend.Services
 
             return 5;
         }
+
+        private sealed record PaymentConfirmationNotification(
+            string ToEmail,
+            string BuyerName,
+            int OrderId,
+            decimal TotalAmount,
+            string? TrackingNumber,
+            IReadOnlyCollection<string> ProductNames);
 
         public async Task<IEnumerable<PurchaseHistoryItemDto>> GetPurchaseHistoryAsync(string buyerUsername)
         {

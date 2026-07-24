@@ -4,6 +4,7 @@ using Backend.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace Backend.Controllers
@@ -14,12 +15,12 @@ namespace Backend.Controllers
     public class OrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
-        private readonly IOrderPricingService _orderPricingService; 
+        private readonly IOrderPricingService _orderPricingService;
 
         public OrderController(IOrderService orderService, IOrderPricingService orderPricingService)
         {
             _orderService = orderService;
-            _orderPricingService = orderPricingService; 
+            _orderPricingService = orderPricingService;
         }
 
         /// <summary>
@@ -50,6 +51,7 @@ namespace Backend.Controllers
         }
 
         [HttpPost("quick-buy")]
+        [EnableRateLimiting("payment_shipping")] // >>> MỚI: giới hạn 20 request/phút/user (tạo đơn + gọi payment gateway)
         public async Task<IActionResult> QuickBuy(
     [FromQuery] int productId,
     [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] QuickBuyCheckoutRequestDto? request)
@@ -67,7 +69,7 @@ namespace Backend.Controllers
                     username,
                     requestedProductId,
                     request?.PaymentMethod,
-                    request?.AddressId,       
+                    request?.AddressId,
                     request?.Quantity ?? 1,
                     request?.CouponCode);
 
@@ -130,6 +132,7 @@ namespace Backend.Controllers
         /// </summary>
         [HttpPut("{orderId}/shipping-status")]
         [Authorize(Roles = "seller, supporter, admin")]
+        [EnableRateLimiting("payment_shipping")] // >>> MỚI: giới hạn 20 request/phút/user
         public async Task<IActionResult> UpdateShippingStatus(
             int orderId,
             [FromBody] UpdateShippingStatusRequestDto request)

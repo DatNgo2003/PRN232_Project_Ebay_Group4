@@ -1,8 +1,10 @@
 using Backend.DTOs.Requests;
+using Backend.Exceptions;
 using Backend.Services;
 using Backend.Services.PaymentGateways;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Backend.Configuration;
 using System.Security.Claims;
@@ -12,6 +14,7 @@ namespace Backend.Controllers;
 [ApiController]
 [Route("api/paypal")]
 [Authorize]
+[EnableRateLimiting("payment_shipping")] // >>> MỚI: giới hạn 20 request/phút/user cho toàn bộ controller
 public sealed class PayPalController : ControllerBase
 {
     private readonly IOrderService _orderService;
@@ -44,6 +47,7 @@ public sealed class PayPalController : ControllerBase
 
         var txId = _txLogger.StartTransaction("Payment.PayPal", "CreateOrder",
             new { request.ProductId, request.Quantity });
+        int? localOrderId = null;
 
         try
         {
@@ -58,6 +62,8 @@ public sealed class PayPalController : ControllerBase
 
             if (checkout == null)
                 return BadRequest(new { message = "Unable to prepare the order." });
+
+            localOrderId = checkout.OrderId;
 
             var gateway = _paymentGatewayFactory.Resolve("PayPal");
             var initiation = await gateway.InitiateAsync(
@@ -103,8 +109,25 @@ public sealed class PayPalController : ControllerBase
                 transactionId = txId
             });
         }
+        catch (BusinessException ex)
+        {
+            if (localOrderId.HasValue)
+            {
+                await _orderService.CancelOrderAsync(localOrderId.Value);
+            }
+
+            _logger.LogWarning(ex,
+                "PayPal order rejected by business rule for product {ProductId}",
+                request.ProductId);
+            return Conflict(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
+            if (localOrderId.HasValue)
+            {
+                await _orderService.CancelOrderAsync(localOrderId.Value);
+            }
+
             _txLogger.LogInterModuleError(txId, "Payment.PayPal", "PayPal API", "CreateOrder", ex);
             _logger.LogError(ex, "Failed to create PayPal order for product {ProductId}", request.ProductId);
             return StatusCode(502, new { message = "Không thể tạo thanh toán PayPal. Vui lòng thử lại." });
@@ -138,6 +161,12 @@ public sealed class PayPalController : ControllerBase
 
             if (!capture.Success)
             {
+                await _orderService.FailPayPalPaymentAsync(
+                    username,
+                    request.OrderId,
+                    request.PayPalOrderId,
+                    capture.Status);
+
                 _txLogger.LogFailure(txId, "Payment.PayPal", "CaptureOrder",
                     new InvalidOperationException($"Trạng thái capture: {capture.Status}"), new { request.OrderId });
                 return BadRequest(new { message = "PayPal chưa hoàn tất thanh toán.", status = capture.Status });
@@ -147,6 +176,12 @@ public sealed class PayPalController : ControllerBase
                 string.IsNullOrWhiteSpace(capture.ProviderTransactionId) ||
                 !string.Equals(capture.Currency, _paypalOptions.Currency, StringComparison.OrdinalIgnoreCase))
             {
+                await _orderService.FailPayPalPaymentAsync(
+                    username,
+                    request.OrderId,
+                    request.PayPalOrderId,
+                    "INVALID_CAPTURE_RESPONSE");
+
                 _txLogger.LogFailure(txId, "Payment.PayPal", "CaptureOrder",
                     new InvalidOperationException("Capture trả về số tiền/tiền tệ không hợp lệ."), new { request.OrderId });
                 return BadRequest(new { message = "PayPal không trả về số tiền capture hợp lệ." });
@@ -171,6 +206,13 @@ public sealed class PayPalController : ControllerBase
                 new { request.OrderId, capture.ProviderTransactionId });
 
             return Ok(completed);
+        }
+        catch (BusinessException ex)
+        {
+            _logger.LogWarning(ex,
+                "PayPal capture rejected by business rule for order {OrderId}",
+                request.OrderId);
+            return Conflict(new { message = ex.Message });
         }
         catch (Exception ex)
         {
