@@ -20,6 +20,7 @@ namespace Backend.Services
         private readonly CloneEbayDbContext _context;                   // >>> THÊM: để lookup Address 
         private readonly IShippingService _shippingService;
         private readonly IPaymentGatewayFactory? _paymentGatewayFactory; // >>> MỚI: plug-in cổng thanh toán 
+        private readonly IShippingTaskQueue? _shippingTaskQueue;         // >>> MỚI: decoupled shipping queue
 
         public OrderService(
             IOrderRepository orderRepository,
@@ -30,7 +31,8 @@ namespace Backend.Services
             IShippingFeeCalculator shippingFeeCalculator, // >>> THÊM 
             CloneEbayDbContext context,                    // >>> THÊM 
             IShippingService? shippingService = null,
-            IPaymentGatewayFactory? paymentGatewayFactory = null // >>> MỚI 
+            IPaymentGatewayFactory? paymentGatewayFactory = null, // >>> MỚI 
+            IShippingTaskQueue? shippingTaskQueue = null           // >>> MỚI 
         )
         {
             _orderRepository = orderRepository;
@@ -44,6 +46,7 @@ namespace Backend.Services
             // while production DI supplies the singleton provider.
             _shippingService = shippingService ?? new MockShippingService();
             _paymentGatewayFactory = paymentGatewayFactory;
+            _shippingTaskQueue = shippingTaskQueue;
         }
 
         private async Task<User?> GetUserFromUsername(string username)
@@ -117,10 +120,11 @@ namespace Backend.Services
             var paymentStatus = "Pending";
             var orderStatus = "Pending";
             var estimatedArrival = DateTime.UtcNow.AddDays(GetEstimatedDeliveryDays(address));
-            var shipment = await _shippingService.CreateShipmentAsync(
-                address,
-                estimatedArrival,
-                $"{user.Id}-{productId}");
+
+            // Decoupled Shipping: Create initial order with pending tracking status immediately (< 2s)
+            // and push shipping creation task to the Background Worker Channel.
+            var initialTrackingNumber = $"PENDING-{user.Id}-{productId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+            var initialShippingStatus = "Preparing";
 
             var order = await _orderRepository.CreateSimpleOrderAsync(
                 user.Id,
@@ -130,10 +134,15 @@ namespace Backend.Services
                 normalizedPaymentMethod,
                 paymentStatus,
                 orderStatus,
+
+                address.Id,          // >>> SỬA: truyền addressId thay vì region string 
+                initialTrackingNumber,
+
                 address.Id,          // >>> SỬA: truyền addressId thay vì region string
                 shipment.Carrier,
                 shipment.Status,
                 shipment.TrackingNumber,
+
                 estimatedArrival,
                 quantity,
                 subTotal,
@@ -145,6 +154,19 @@ namespace Backend.Services
             if (appliedCouponId.HasValue)
             {
                 await _couponRepository.IncrementUsedCountAsync(appliedCouponId.Value);
+            }
+
+            // Push shipping task to bounded channel queue for asynchronous worker execution
+            if (_shippingTaskQueue != null)
+            {
+                var txId = $"TXN-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}[..8]";
+                await _shippingTaskQueue.QueueShippingTaskAsync(new DTOs.ShippingTaskMessage(
+                    order.Id,
+                    address.Id,
+                    user.Id,
+                    productId,
+                    txId,
+                    estimatedArrival));
             }
 
             return new QuickBuyCheckoutResponseDto
@@ -159,8 +181,8 @@ namespace Backend.Services
                 AddressId = address.Id,
                 ShippingDestination = $"{address.City ?? "N/A"}, {address.Country ?? "N/A"}",
 
-                TrackingNumber = shipment.TrackingNumber,
-                ShippingStatus = shipment.Status,
+                TrackingNumber = initialTrackingNumber,
+                ShippingStatus = initialShippingStatus,
                 EstimatedArrival = estimatedArrival,
 
                 Quantity = quantity,
