@@ -3,6 +3,7 @@ using Backend.Services;
 using Backend.Services.PaymentGateways;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Backend.Configuration;
 using System.Security.Claims;
@@ -12,6 +13,7 @@ namespace Backend.Controllers;
 [ApiController]
 [Route("api/paypal")]
 [Authorize]
+[EnableRateLimiting("payment_shipping")] // >>> MỚI: giới hạn 20 request/phút/user cho toàn bộ controller
 public sealed class PayPalController : ControllerBase
 {
     private readonly IOrderService _orderService;

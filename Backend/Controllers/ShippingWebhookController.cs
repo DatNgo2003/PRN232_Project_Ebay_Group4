@@ -1,6 +1,6 @@
-﻿using Backend.Filters;
-using Backend.Services;
+﻿using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Backend.Controllers;
 
@@ -14,33 +14,45 @@ public sealed record ShippingWebhookPayload(int OrderId, string Status, string? 
 /// </summary>
 [ApiController]
 [Route("api/webhooks/shipping")]
-[VerifyWebhookSignature("Shipping:WebhookSecret", "Shipping.Webhook")]
+[EnableRateLimiting("payment_shipping")] // >>> MỚI: giới hạn 20 request/phút/IP (chưa đăng nhập nên tính theo IP)
 public sealed class ShippingWebhookController : ControllerBase
 {
     private readonly IOrderService _orderService;
     private readonly ITransactionLogger _txLogger;
+    private readonly IConfiguration _configuration;
 
-    // KHÔNG cần IConfiguration nữa vì attribute đã lo việc verify secret
     public ShippingWebhookController(
         IOrderService orderService,
-        ITransactionLogger txLogger)
+        ITransactionLogger txLogger,
+        IConfiguration configuration)
     {
         _orderService = orderService;
         _txLogger = txLogger;
+        _configuration = configuration;
     }
 
     [HttpPost("status-update")]
     public async Task<IActionResult> HandleStatusUpdate(
-        [FromBody] ShippingWebhookPayload payload,   // bỏ tham số [FromHeader] secret
+        [FromHeader(Name = "X-Webhook-Secret")] string? secret,
+        [FromBody] ShippingWebhookPayload payload,
         CancellationToken cancellationToken)
     {
-        // Bỏ toàn bộ khối kiểm tra secret cũ — attribute đã xử lý trước khi vào đây
+        var expectedSecret = _configuration["Shipping:WebhookSecret"];
+
+        if (string.IsNullOrWhiteSpace(expectedSecret) || !string.Equals(secret, expectedSecret, StringComparison.Ordinal))
+        {
+            var authTxId = _txLogger.StartTransaction("Shipping.Webhook", "Auth", payload);
+            _txLogger.LogFailure(authTxId, "Shipping.Webhook", "Auth",
+                new UnauthorizedAccessException("Webhook secret không hợp lệ."), payload);
+            return Unauthorized(new { message = "Invalid webhook secret." });
+        }
 
         var txId = _txLogger.StartTransaction("Shipping.Webhook", "StatusUpdate", payload);
 
         try
         {
             var updated = await _orderService.UpdateShippingStatusAsync(payload.OrderId, payload.Status);
+
             if (!updated)
             {
                 _txLogger.LogFailure(txId, "Shipping.Webhook", "StatusUpdate",
