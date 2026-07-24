@@ -102,7 +102,8 @@ namespace Backend.Repositories
                     .ThenInclude(o => o.Payments)
                 .Include(oi => oi.Order)
                     .ThenInclude(o => o.ShippingInfos)
-                .Where(oi => oi.Order.BuyerId == buyerId)
+                .Where(oi => oi.Order.BuyerId == buyerId
+                    && oi.Order.Status != "Cancelled")
                 .OrderByDescending(oi => oi.Order.OrderDate)
                 .ToListAsync();
         }
