@@ -79,13 +79,60 @@ BEGIN TRY
         THROW 51004, 'Inventory contains negative quantities. Correct the data before running this migration.', 1;
     END;
 
+    IF EXISTS
+    (
+        SELECT 1
+        FROM [dbo].[Inventory]
+        WHERE [productId] IS NOT NULL
+        GROUP BY [productId]
+        HAVING SUM(CAST(ISNULL([quantity], 0) AS bigint)) > 2147483647
+    )
+    BEGIN
+        THROW 51005, 'The combined quantity of a duplicated Inventory product exceeds the int limit.', 1;
+    END;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM [dbo].[InventoryReservation]
+        WHERE [quantity] <= 0
+    )
+    BEGIN
+        THROW 51006, 'InventoryReservation contains a non-positive quantity.', 1;
+    END;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM [dbo].[InventoryReservation]
+        WHERE [status] NOT IN (N'Held', N'Confirmed', N'Released')
+    )
+    BEGIN
+        THROW 51007, 'InventoryReservation contains an unsupported status.', 1;
+    END;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM [dbo].[InventoryReservation] AS reservation
+        LEFT JOIN [dbo].[OrderTable] AS orders
+            ON orders.[id] = reservation.[orderId]
+        LEFT JOIN [dbo].[Product] AS products
+            ON products.[id] = reservation.[productId]
+        WHERE orders.[id] IS NULL
+           OR products.[id] IS NULL
+    )
+    BEGIN
+        THROW 51008, 'InventoryReservation contains an invalid orderId or productId.', 1;
+    END;
+
     /* Preserve total stock while reducing Inventory to one row per product. */
     ;WITH InventoryTotals AS
     (
         SELECT
             [productId],
             MIN([id]) AS [keeperId],
-            SUM(ISNULL([quantity], 0)) AS [totalQuantity]
+            SUM(CAST(ISNULL([quantity], 0) AS bigint)) AS [totalQuantity]
         FROM [dbo].[Inventory]
         WHERE [productId] IS NOT NULL
         GROUP BY [productId]
