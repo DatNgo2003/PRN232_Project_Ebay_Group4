@@ -1,0 +1,35 @@
+name: .NET Core CI
+
+# Tự động chạy khi Push hoặc mở PR vào nhánh main / master
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Checkout code từ repo về runner
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. Cài đặt môi trường .NET SDK (phiên bản 8.x - thay đổi nếu dự án dùng bản khác)
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    # 3. Restore các gói NuGet dựa trên file solution .sln
+    - name: Restore dependencies
+      run: dotnet restore PRN232-Ebay-Buyer.sln
+
+    # 4. Build solution (bao gồm cả API và các project con)
+    - name: Build solution
+      run: dotnet build PRN232-Ebay-Buyer.sln --configuration Release --no-restore
+
+    # 5. Chạy Unit Tests 
+    - name: Test solution
+      run: dotnet test PRN232-Ebay-Buyer.sln --configuration Release --no-build --verbosity normal
