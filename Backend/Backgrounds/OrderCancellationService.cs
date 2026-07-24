@@ -10,7 +10,7 @@ namespace Backend.Backgrounds
     /// <summary>
     /// Background service chạy định kỳ để tự động huỷ các đơn hàng
     /// quá thời gian chờ thanh toán (cấu hình tại OrderSettings:PaymentTimeoutMinutes).
-    /// Mặc định: 30 phút. Chu kỳ kiểm tra = timeout/3 (tối thiểu 1 phút, tối đa 5 phút).
+    /// Mặc định: 30 phút. Kiểm tra mỗi 5 phút.
     /// </summary>
     public class OrderCancellationService : BackgroundService
     {
@@ -18,7 +18,8 @@ namespace Backend.Backgrounds
         private readonly ILogger<OrderCancellationService> _logger;
         private readonly IConfiguration _configuration;
 
-        // CheckInterval được tính động trong ExecuteAsync dựa theo cấu hình
+        // Kiểm tra mỗi 5 phút
+        private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(5);
 
         public OrderCancellationService(
             IServiceProvider services,
@@ -45,12 +46,8 @@ namespace Backend.Backgrounds
                     _logger.LogError(ex, "Lỗi trong OrderCancellationService khi xử lý đơn hàng quá hạn.");
                 }
 
-                // Chu kỳ kiểm tra = timeout/3, tối thiểu 1 phút, tối đa 5 phút
-                var timeoutMinutes = _configuration.GetValue<double>("OrderSettings:PaymentTimeoutMinutes", 30);
-                var checkMinutes = Math.Clamp(timeoutMinutes / 3.0, 1.0, 5.0);
-                var checkInterval = TimeSpan.FromMinutes(checkMinutes);
-                _logger.LogDebug("Lần kiểm tra tiếp theo sau {CheckMinutes:F1} phút.", checkMinutes);
-                await Task.Delay(checkInterval, stoppingToken);
+                // Chờ 5 phút trước lần kiểm tra tiếp theo
+                await Task.Delay(CheckInterval, stoppingToken);
             }
 
             _logger.LogInformation("OrderCancellationService đã dừng.");
@@ -58,8 +55,8 @@ namespace Backend.Backgrounds
 
         private async Task ProcessExpiredOrdersAsync()
         {
-            // Lấy cấu hình timeout (phút), hỗ trợ giá trị thập phân (vd: 0.5, 1.5)
-            var timeoutMinutes = _configuration.GetValue<double>("OrderSettings:PaymentTimeoutMinutes", 30);
+            // Lấy cấu hình timeout (phút)
+            var timeoutMinutes = _configuration.GetValue<int>("OrderSettings:PaymentTimeoutMinutes", 30);
             var cutoffTime = DateTime.UtcNow.AddMinutes(-timeoutMinutes);
 
             using var scope = _services.CreateScope();
@@ -87,7 +84,7 @@ namespace Backend.Backgrounds
                     await orderRepository.CancelOrderAsync(order.Id);
 
                     _logger.LogInformation(
-                        "Đã huỷ đơn hàng #{OrderId} (buyer: {BuyerEmail}) do quá {Timeout:F1} phút chưa thanh toán.",
+                        "Đã huỷ đơn hàng #{OrderId} (buyer: {BuyerEmail}) do quá {Timeout} phút chưa thanh toán.",
                         order.Id,
                         order.Buyer?.Email ?? "N/A",
                         timeoutMinutes);

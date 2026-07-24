@@ -12,14 +12,17 @@ namespace Backend.Repositories
             string paymentMethod,
             string paymentStatus,
             string orderStatus,
-            int addressId,              
+            int addressId,
+            string shippingCarrier,
+            string shippingStatus,
             string trackingNumber,
             DateTime estimatedArrival,
             int quantity,
             decimal subTotal,
             decimal discountAmount,
             decimal totalAmount,
-            int? couponId);
+            int? couponId,
+            bool confirmInventoryImmediately);
 
         Task<IEnumerable<OrderItem>> GetPurchaseHistoryAsync(int buyerId);
         Task<IEnumerable<OrderItem>> GetOrderItemsBySellerIdAsync(int sellerId);
@@ -27,5 +30,6 @@ namespace Backend.Repositories
         Task UpdateShippingStatusAsync(int orderId, string newShippingStatus);
         Task<IEnumerable<OrderTable>> GetPendingPaymentOrdersAsync(DateTime cutoffTime);
         Task CancelOrderAsync(int orderId);
+        Task<bool> FailPayPalPaymentAsync(int orderId, int buyerId, string paypalOrderId, string failureStatus);
     }
 }

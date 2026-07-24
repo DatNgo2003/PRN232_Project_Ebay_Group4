@@ -4,6 +4,7 @@ using Backend.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Migrations
 {
     [DbContext(typeof(CloneEbayDbContext))]
-    partial class CloneEbayDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724152041_AddInventoryReservations")]
+    partial class AddInventoryReservations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -329,14 +332,9 @@ namespace Backend.Migrations
                     b.HasKey("Id")
                         .HasName("PK__Inventor__3213E83F48B36DEB");
 
-                    b.HasIndex(new[] { "ProductId" }, "IX_Inventory_productId")
-                        .IsUnique()
-                        .HasFilter("[productId] IS NOT NULL");
+                    b.HasIndex(new[] { "ProductId" }, "IX_Inventory_productId");
 
-                    b.ToTable("Inventory", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Inventory_Quantity_NonNegative", "[quantity] IS NULL OR [quantity] >= 0");
-                        });
+                    b.ToTable("Inventory", (string)null);
                 });
 
             modelBuilder.Entity("Backend.Models.InventoryReservation", b =>
@@ -385,12 +383,7 @@ namespace Backend.Migrations
                     b.HasIndex("OrderId", "ProductId")
                         .IsUnique();
 
-                    b.ToTable("InventoryReservation", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_InventoryReservation_Quantity_Positive", "[quantity] > 0");
-
-                            t.HasCheckConstraint("CK_InventoryReservation_Status", "[status] IN ('Held', 'Confirmed', 'Released')");
-                        });
+                    b.ToTable("InventoryReservation", (string)null);
                 });
 
             modelBuilder.Entity("Backend.Models.Message", b =>

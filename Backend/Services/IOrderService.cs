@@ -8,7 +8,7 @@ namespace Backend.Services
             string buyerUsername,
             int productId,
             string? paymentMethod,
-            int? addressId,              
+            int? addressId,
             int quantity = 1,
             string? couponCode = null);
 
@@ -35,6 +35,12 @@ namespace Backend.Services
             string paypalCaptureId,
             decimal capturedAmount,
             string currency);
+
+        Task<bool> FailPayPalPaymentAsync(
+            string buyerUsername,
+            int orderId,
+            string paypalOrderId,
+            string failureStatus);
 
         Task CancelOrderAsync(int orderId);
     }
