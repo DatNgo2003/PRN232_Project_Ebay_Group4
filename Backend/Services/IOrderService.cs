@@ -46,6 +46,12 @@ namespace Backend.Services
             decimal capturedAmount,
             string currency);
 
+        Task<bool> FailPayPalPaymentAsync(
+            string buyerUsername,
+            int orderId,
+            string paypalOrderId,
+            string failureStatus);
+
         Task CancelOrderAsync(int orderId);
     }
 }

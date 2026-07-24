@@ -35,6 +35,8 @@ public partial class CloneEbayDbContext : DbContext
 
     public virtual DbSet<Inventory> Inventories { get; set; }
 
+    public virtual DbSet<InventoryReservation> InventoryReservations { get; set; }
+
     public virtual DbSet<Message> Messages { get; set; }
 
     public virtual DbSet<OrderItem> OrderItems { get; set; }
@@ -254,9 +256,13 @@ public partial class CloneEbayDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Inventor__3213E83F48B36DEB");
 
-            entity.ToTable("Inventory");
+            entity.ToTable("Inventory", table =>
+                table.HasCheckConstraint(
+                    "CK_Inventory_Quantity_NonNegative",
+                    "[quantity] IS NULL OR [quantity] >= 0"));
 
-            entity.HasIndex(e => e.ProductId, "IX_Inventory_productId");
+            entity.HasIndex(e => e.ProductId, "IX_Inventory_productId")
+                .IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.LastUpdated)
@@ -270,22 +276,69 @@ public partial class CloneEbayDbContext : DbContext
                 .HasConstraintName("FK__Inventory__produ__6383C8BA");
         });
 
-		modelBuilder.Entity<Message>(entity =>
-		{
-			entity.HasKey(e => e.Id);
+        modelBuilder.Entity<InventoryReservation>(entity =>
+        {
+            entity.ToTable("InventoryReservation", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_InventoryReservation_Quantity_Positive",
+                    "[quantity] > 0");
+                table.HasCheckConstraint(
+                    "CK_InventoryReservation_Status",
+                    "[status] IN ('Held', 'Confirmed', 'Released')");
+            });
 
-			entity.ToTable("Message");
+            entity.HasKey(e => e.Id);
 
-			entity.Property(e => e.Id).HasColumnName("id");
-			entity.Property(e => e.Content).HasColumnName("content");
-			entity.Property(e => e.SenderId).HasColumnName("senderId");
-			entity.Property(e => e.ReceiverId).HasColumnName("receiverId");
-			entity.Property(e => e.Timestamp)
-				.HasColumnName("timestamp")
-				.HasColumnType("datetime");
-		});
+            entity.HasIndex(e => new { e.OrderId, e.ProductId })
+                .IsUnique();
 
-		modelBuilder.Entity<OrderItem>(entity =>
+            entity.HasIndex(e => e.ProductId);
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.OrderId).HasColumnName("orderId");
+            entity.Property(e => e.ProductId).HasColumnName("productId");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasColumnName("status");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("createdAt");
+            entity.Property(e => e.ConfirmedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("confirmedAt");
+            entity.Property(e => e.ReleasedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("releasedAt");
+
+            entity.HasOne(e => e.Order)
+                .WithMany(e => e.InventoryReservations)
+                .HasForeignKey(e => e.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Product)
+                .WithMany(e => e.InventoryReservations)
+                .HasForeignKey(e => e.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Message>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.ToTable("Message");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Content).HasColumnName("content");
+            entity.Property(e => e.SenderId).HasColumnName("senderId");
+            entity.Property(e => e.ReceiverId).HasColumnName("receiverId");
+            entity.Property(e => e.Timestamp)
+                .HasColumnName("timestamp")
+                .HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<OrderItem>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__OrderIte__3213E83F7EC2808B");
 

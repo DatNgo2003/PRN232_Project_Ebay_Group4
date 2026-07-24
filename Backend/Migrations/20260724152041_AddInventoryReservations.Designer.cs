@@ -4,6 +4,7 @@ using Backend.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Migrations
 {
     [DbContext(typeof(CloneEbayDbContext))]
-    partial class CloneEbayDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724152041_AddInventoryReservations")]
+    partial class AddInventoryReservations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -110,70 +113,6 @@ namespace Backend.Migrations
                     b.HasIndex(new[] { "ProductId" }, "IX_Bid_productId");
 
                     b.ToTable("Bid", (string)null);
-                });
-
-            modelBuilder.Entity("Backend.Models.Cart", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .HasColumnType("datetime")
-                        .HasColumnName("createdAt");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime")
-                        .HasColumnName("updatedAt");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int")
-                        .HasColumnName("userId");
-
-                    b.HasKey("Id")
-                        .HasName("PK__Cart__3213E83F");
-
-                    b.HasIndex(new[] { "UserId" }, "IX_Cart_userId");
-
-                    b.ToTable("Cart", (string)null);
-                });
-
-            modelBuilder.Entity("Backend.Models.CartItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("AddedAt")
-                        .HasColumnType("datetime")
-                        .HasColumnName("addedAt");
-
-                    b.Property<int>("CartId")
-                        .HasColumnType("int")
-                        .HasColumnName("cartId");
-
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int")
-                        .HasColumnName("productId");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int")
-                        .HasColumnName("quantity");
-
-                    b.HasKey("Id")
-                        .HasName("PK__CartItem__3213E83F");
-
-                    b.HasIndex(new[] { "CartId" }, "IX_CartItem_cartId");
-
-                    b.HasIndex(new[] { "ProductId" }, "IX_CartItem_productId");
-
-                    b.ToTable("CartItem", (string)null);
                 });
 
             modelBuilder.Entity("Backend.Models.Category", b =>
@@ -393,14 +332,9 @@ namespace Backend.Migrations
                     b.HasKey("Id")
                         .HasName("PK__Inventor__3213E83F48B36DEB");
 
-                    b.HasIndex(new[] { "ProductId" }, "IX_Inventory_productId")
-                        .IsUnique()
-                        .HasFilter("[productId] IS NOT NULL");
+                    b.HasIndex(new[] { "ProductId" }, "IX_Inventory_productId");
 
-                    b.ToTable("Inventory", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Inventory_Quantity_NonNegative", "[quantity] IS NULL OR [quantity] >= 0");
-                        });
+                    b.ToTable("Inventory", (string)null);
                 });
 
             modelBuilder.Entity("Backend.Models.InventoryReservation", b =>
@@ -449,12 +383,7 @@ namespace Backend.Migrations
                     b.HasIndex("OrderId", "ProductId")
                         .IsUnique();
 
-                    b.ToTable("InventoryReservation", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_InventoryReservation_Quantity_Positive", "[quantity] > 0");
-
-                            t.HasCheckConstraint("CK_InventoryReservation_Status", "[status] IN ('Held', 'Confirmed', 'Released')");
-                        });
+                    b.ToTable("InventoryReservation", (string)null);
                 });
 
             modelBuilder.Entity("Backend.Models.Message", b =>
@@ -991,39 +920,6 @@ namespace Backend.Migrations
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("Backend.Models.Cart", b =>
-                {
-                    b.HasOne("Backend.Models.User", "User")
-                        .WithMany("Carts")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK__Cart__userId");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Backend.Models.CartItem", b =>
-                {
-                    b.HasOne("Backend.Models.Cart", "Cart")
-                        .WithMany("CartItems")
-                        .HasForeignKey("CartId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK__CartItem__cartId");
-
-                    b.HasOne("Backend.Models.Product", "Product")
-                        .WithMany("CartItems")
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK__CartItem__productId");
-
-                    b.Navigation("Cart");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("Backend.Models.Coupon", b =>
                 {
                     b.HasOne("Backend.Models.Product", "Product")
@@ -1248,11 +1144,6 @@ namespace Backend.Migrations
                     b.Navigation("OrderTables");
                 });
 
-            modelBuilder.Entity("Backend.Models.Cart", b =>
-                {
-                    b.Navigation("CartItems");
-                });
-
             modelBuilder.Entity("Backend.Models.Category", b =>
                 {
                     b.Navigation("Products");
@@ -1289,8 +1180,6 @@ namespace Backend.Migrations
                 {
                     b.Navigation("Bids");
 
-                    b.Navigation("CartItems");
-
                     b.Navigation("Coupons");
 
                     b.Navigation("Inventories");
@@ -1309,8 +1198,6 @@ namespace Backend.Migrations
                     b.Navigation("Addresses");
 
                     b.Navigation("Bids");
-
-                    b.Navigation("Carts");
 
                     b.Navigation("Disputes");
 

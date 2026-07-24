@@ -16,13 +16,16 @@ namespace Backend.Repositories
             string paymentStatus,
             string orderStatus,
             int addressId,
+            string shippingCarrier,
+            string shippingStatus,
             string trackingNumber,
             DateTime estimatedArrival,
             int quantity,
             decimal subTotal,
             decimal discountAmount,
             decimal totalAmount,
-            int? couponId);
+            int? couponId,
+            bool confirmInventoryImmediately);
 
         // >>> MỚI: tạo 1 đơn hàng gồm NHIỀU sản phẩm (checkout từ giỏ hàng)
         Task<OrderTable> CreateMultiItemOrderAsync(
@@ -46,5 +49,6 @@ namespace Backend.Repositories
         Task UpdateShippingStatusAsync(int orderId, string newShippingStatus);
         Task<IEnumerable<OrderTable>> GetPendingPaymentOrdersAsync(DateTime cutoffTime);
         Task CancelOrderAsync(int orderId);
+        Task<bool> FailPayPalPaymentAsync(int orderId, int buyerId, string paypalOrderId, string failureStatus);
     }
 }
