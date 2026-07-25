@@ -19,6 +19,10 @@ public partial class CloneEbayDbContext : DbContext
 
     public virtual DbSet<Bid> Bids { get; set; }
 
+    public virtual DbSet<Cart> Carts { get; set; }
+
+    public virtual DbSet<CartItem> CartItems { get; set; }
+
     public virtual DbSet<Category> Categories { get; set; }
 
     public virtual DbSet<Coupon> Coupons { get; set; }
@@ -630,6 +634,55 @@ public partial class CloneEbayDbContext : DbContext
             entity.Property(e => e.EventKey).HasMaxLength(200).IsRequired();
             entity.Property(e => e.ProcessedAt).HasColumnType("datetime");
             entity.HasIndex(e => e.EventKey).IsUnique();
+        });
+
+        modelBuilder.Entity<Cart>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Cart__3213E83F");
+
+            entity.ToTable("Cart");
+
+            entity.HasIndex(e => e.UserId, "IX_Cart_userId");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("createdAt");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("updatedAt");
+            entity.Property(e => e.UserId).HasColumnName("userId");
+
+            entity.HasOne(d => d.User).WithMany(p => p.Carts)
+                .HasForeignKey(d => d.UserId)
+                .HasConstraintName("FK__Cart__userId");
+        });
+
+        modelBuilder.Entity<CartItem>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__CartItem__3213E83F");
+
+            entity.ToTable("CartItem");
+
+            entity.HasIndex(e => e.CartId, "IX_CartItem_cartId");
+
+            entity.HasIndex(e => e.ProductId, "IX_CartItem_productId");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AddedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("addedAt");
+            entity.Property(e => e.CartId).HasColumnName("cartId");
+            entity.Property(e => e.ProductId).HasColumnName("productId");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+
+            entity.HasOne(d => d.Cart).WithMany(p => p.CartItems)
+                .HasForeignKey(d => d.CartId)
+                .HasConstraintName("FK__CartItem__cartId");
+
+            entity.HasOne(d => d.Product).WithMany(p => p.CartItems)
+                .HasForeignKey(d => d.ProductId)
+                .HasConstraintName("FK__CartItem__productId");
         });
 
         OnModelCreatingPartial(modelBuilder);

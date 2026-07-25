@@ -110,18 +110,28 @@
                                 </div>
 
                                 <div class="order-status-bar">
-                                    <div class="status-node @(order.OrderStatus == "Paid" || order.OrderStatus == "Dispatched" || order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
+                                    <div class="status-node @(order.OrderStatus == "Paid" || order.ShippingStatus == "Processing" || order.ShippingStatus == "Shipped" || order.ShippingStatus == "InTransit" || order.ShippingStatus == "OutForDelivery" || order.ShippingStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
                                         <div class="status-dot"></div>
                                         <span class="status-label">PAID</span>
                                     </div>
-                                    <div class="status-line @(order.OrderStatus == "Dispatched" || order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")"></div>
-                                    <div class="status-node @(order.OrderStatus == "Dispatched" || order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
+                                    <div class="status-line @(order.ShippingStatus == "Shipped" || order.ShippingStatus == "InTransit" || order.ShippingStatus == "OutForDelivery" || order.ShippingStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")"></div>
+                                    <div class="status-node @(order.ShippingStatus == "Shipped" || order.ShippingStatus == "InTransit" || order.ShippingStatus == "OutForDelivery" || order.ShippingStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
                                         <div class="status-dot"></div>
-                                        <span class="status-label">DISPATCHED</span>
+                                        <span class="status-label">SHIPPED</span>
                                     </div>
-                                    <div class="status-line @(order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")"></div>
-                                    <div class="status-node @(order.OrderStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
-                                        <div classs="status-dot"></div>
+                                    <div class="status-line @(order.ShippingStatus == "InTransit" || order.ShippingStatus == "OutForDelivery" || order.ShippingStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")"></div>
+                                    <div class="status-node @(order.ShippingStatus == "InTransit" || order.ShippingStatus == "OutForDelivery" || order.ShippingStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
+                                        <div class="status-dot"></div>
+                                        <span class="status-label">IN TRANSIT</span>
+                                    </div>
+                                    <div class="status-line @(order.ShippingStatus == "OutForDelivery" || order.ShippingStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")"></div>
+                                    <div class="status-node @(order.ShippingStatus == "OutForDelivery" || order.ShippingStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
+                                        <div class="status-dot"></div>
+                                        <span class="status-label">OUT FOR DELIVERY</span>
+                                    </div>
+                                    <div class="status-line @(order.ShippingStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")"></div>
+                                    <div class="status-node @(order.ShippingStatus == "Delivered" || order.OrderStatus == "Completed" ? "active" : "")">
+                                        <div class="status-dot"></div>
                                         <span class="status-label">DELIVERED</span>
                                     </div>
                                 </div>
@@ -160,6 +170,22 @@
                                         @if (order.Items.Count > 1)
                                         {
                                             <p class="small-text text-muted mb-0">...and @(order.Items.Count - 1) other item(s) in this order.</p>
+                                        }
+
+                                        @* Shipping info *@
+                                        @if (!string.IsNullOrWhiteSpace(order.TrackingNumber))
+                                        {
+                                            <p class="small-text mb-1 mt-2">
+                                                <strong>Shipping:</strong> @(order.ShippingCarrier ?? "N/A")
+                                                | Status: <span class="badge bg-info">@(order.ShippingStatus ?? "N/A")</span>
+                                            </p>
+                                            <p class="text-muted small-text mb-1">
+                                                Tracking: @order.TrackingNumber
+                                                @if (order.EstimatedArrival.HasValue)
+                                                {
+                                                    <span>| ETA: @order.EstimatedArrival.Value.ToString("dd-MMM-yyyy")</span>
+                                                }
+                                            </p>
                                         }
                                     </div>
                                     <div class="order-seller-info">

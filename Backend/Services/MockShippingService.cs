@@ -1,4 +1,5 @@
 using Backend.Models;
+using Backend.Services.Shipping;
 using System.Collections.Concurrent;
 
 namespace Backend.Services;
@@ -12,7 +13,7 @@ public sealed class MockShippingService : IShippingService
 {
     private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Preparing", "Shipping", "Delivered", "Failed"
+        "Processing", "Shipped", "InTransit", "OutForDelivery", "Delivered", "Failed"
     };
 
     private readonly ConcurrentDictionary<string, string> _statuses = new(StringComparer.OrdinalIgnoreCase);
@@ -27,6 +28,7 @@ public sealed class MockShippingService : IShippingService
         Address destination,
         DateTime estimatedArrival,
         string orderReference,
+        string? carrierKey = null,
         CancellationToken cancellationToken = default)
     {
         throw new HttpRequestException("Lỗi mạng giả lập: Không thể kết nối tới server vận chuyển!");
@@ -47,10 +49,17 @@ public sealed class MockShippingService : IShippingService
         // Keep the value within ShippingInfo.trackingNumber (nvarchar(100)).
         safeReference = safeReference.Length > 20 ? safeReference[..20] : safeReference;
         var trackingNumber = $"MOCK-{safeReference}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}";
-        _statuses[trackingNumber] = "Preparing";
+        _statuses[trackingNumber] = "Processing";
 
+<<<<<<< HEAD
         var carrier = $"MockExpress - {destination.City ?? destination.Country ?? "N/A"}";
         return new ShippingShipment(carrier, trackingNumber, "Preparing", estimatedArrival);
+=======
+        var carrier = string.IsNullOrWhiteSpace(carrierKey)
+            ? $"MockExpress - {destination.City ?? destination.Country ?? "N/A"}"
+            : carrierKey;
+        return Task.FromResult(new ShippingShipment(carrier, trackingNumber, "Processing", estimatedArrival));
+>>>>>>> 61ded49ec859a8a4c0c80afa6328b0b3f068e920
     }
 
     public Task<bool> UpdateShipmentStatusAsync(
@@ -71,5 +80,19 @@ public sealed class MockShippingService : IShippingService
         // lets those orders transition as well.
         _statuses.AddOrUpdate(normalizedTrackingNumber, normalizedStatus, (_, _) => normalizedStatus);
         return Task.FromResult(true);
+    }
+
+    public IReadOnlyList<ShippingCarrierInfo> GetAvailableCarriers()
+    {
+        return new List<ShippingCarrierInfo>
+        {
+            new("MOCK", "Mock Express", "Mock carrier for testing")
+        }.AsReadOnly();
+    }
+
+    public decimal EstimateFee(Address destination, decimal orderTotal, string carrierKey)
+    {
+        // Mock: flat $5.00 shipping fee
+        return 5.00m;
     }
 }

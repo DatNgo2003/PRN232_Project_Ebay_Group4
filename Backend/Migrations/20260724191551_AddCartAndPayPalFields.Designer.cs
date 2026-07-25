@@ -4,6 +4,7 @@ using Backend.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Migrations
 {
     [DbContext(typeof(CloneEbayDbContext))]
-    partial class CloneEbayDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724191551_AddCartAndPayPalFields")]
+    partial class AddCartAndPayPalFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -393,68 +396,9 @@ namespace Backend.Migrations
                     b.HasKey("Id")
                         .HasName("PK__Inventor__3213E83F48B36DEB");
 
-                    b.HasIndex(new[] { "ProductId" }, "IX_Inventory_productId")
-                        .IsUnique()
-                        .HasFilter("[productId] IS NOT NULL");
+                    b.HasIndex(new[] { "ProductId" }, "IX_Inventory_productId");
 
-                    b.ToTable("Inventory", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Inventory_Quantity_NonNegative", "[quantity] IS NULL OR [quantity] >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("Backend.Models.InventoryReservation", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("ConfirmedAt")
-                        .HasColumnType("datetime")
-                        .HasColumnName("confirmedAt");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime")
-                        .HasColumnName("createdAt");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int")
-                        .HasColumnName("orderId");
-
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int")
-                        .HasColumnName("productId");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int")
-                        .HasColumnName("quantity");
-
-                    b.Property<DateTime?>("ReleasedAt")
-                        .HasColumnType("datetime")
-                        .HasColumnName("releasedAt");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
-                        .HasColumnName("status");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("OrderId", "ProductId")
-                        .IsUnique();
-
-                    b.ToTable("InventoryReservation", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_InventoryReservation_Quantity_Positive", "[quantity] > 0");
-
-                            t.HasCheckConstraint("CK_InventoryReservation_Status", "[status] IN ('Held', 'Confirmed', 'Released')");
-                        });
+                    b.ToTable("Inventory", (string)null);
                 });
 
             modelBuilder.Entity("Backend.Models.Message", b =>
@@ -1088,25 +1032,6 @@ namespace Backend.Migrations
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("Backend.Models.InventoryReservation", b =>
-                {
-                    b.HasOne("Backend.Models.OrderTable", "Order")
-                        .WithMany("InventoryReservations")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Backend.Models.Product", "Product")
-                        .WithMany("InventoryReservations")
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("Backend.Models.Message", b =>
                 {
                     b.HasOne("Backend.Models.Product", null)
@@ -1274,8 +1199,6 @@ namespace Backend.Migrations
 
                     b.Navigation("Feedbacks");
 
-                    b.Navigation("InventoryReservations");
-
                     b.Navigation("OrderItems");
 
                     b.Navigation("Payments");
@@ -1294,8 +1217,6 @@ namespace Backend.Migrations
                     b.Navigation("Coupons");
 
                     b.Navigation("Inventories");
-
-                    b.Navigation("InventoryReservations");
 
                     b.Navigation("Messages");
 

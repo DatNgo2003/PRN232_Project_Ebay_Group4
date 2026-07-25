@@ -1,3 +1,4 @@
+using Backend.DTOs.Requests;
 using Backend.DTOs.Responses;
 using Backend.Exceptions;
 using Backend.Models;
@@ -16,11 +17,10 @@ namespace Backend.Services
         private readonly IUserRepository _userRepository;
         private readonly IEmailService _emailService;
         private readonly ICouponRepository _couponRepository;
-        private readonly IShippingFeeCalculator _shippingFeeCalculator; // >>> THÊM: dùng chung chức năng 2 
-        private readonly CloneEbayDbContext _context;                   // >>> THÊM: để lookup Address 
+        private readonly IShippingFeeCalculator _shippingFeeCalculator;
+        private readonly CloneEbayDbContext _context;
         private readonly IShippingService _shippingService;
-        private readonly IPaymentGatewayFactory? _paymentGatewayFactory; // >>> MỚI: plug-in cổng thanh toán 
-        private readonly IShippingTaskQueue? _shippingTaskQueue;         // >>> MỚI: decoupled shipping queue
+        private readonly IPaymentGatewayFactory? _paymentGatewayFactory;
 
         public OrderService(
             IOrderRepository orderRepository,
@@ -28,11 +28,10 @@ namespace Backend.Services
             IUserRepository userRepository,
             IEmailService emailService,
             ICouponRepository couponRepository,
-            IShippingFeeCalculator shippingFeeCalculator, // >>> THÊM 
-            CloneEbayDbContext context,                    // >>> THÊM 
+            IShippingFeeCalculator shippingFeeCalculator,
+            CloneEbayDbContext context,
             IShippingService? shippingService = null,
-            IPaymentGatewayFactory? paymentGatewayFactory = null, // >>> MỚI 
-            IShippingTaskQueue? shippingTaskQueue = null           // >>> MỚI 
+            IPaymentGatewayFactory? paymentGatewayFactory = null
         )
         {
             _orderRepository = orderRepository;
@@ -42,11 +41,8 @@ namespace Backend.Services
             _couponRepository = couponRepository;
             _shippingFeeCalculator = shippingFeeCalculator;
             _context = context;
-            // Optional fallback keeps the service usable by existing callers
-            // while production DI supplies the singleton provider.
             _shippingService = shippingService ?? new MockShippingService();
             _paymentGatewayFactory = paymentGatewayFactory;
-            _shippingTaskQueue = shippingTaskQueue;
         }
 
         private async Task<User?> GetUserFromUsername(string username)
@@ -58,9 +54,10 @@ namespace Backend.Services
             string buyerUsername,
             int productId,
             string? paymentMethod,
-            int? addressId,            // >>> SỬA: thay shippingRegion 
+            int? addressId,
             int quantity = 1,
-            string? couponCode = null)
+            string? couponCode = null,
+            string? carrierKey = null)
         {
             var user = await GetUserFromUsername(buyerUsername);
             if (user == null) return null;
@@ -70,7 +67,6 @@ namespace Backend.Services
 
             if (quantity <= 0) quantity = 1;
 
-            // >>> SỬA: lấy Address thật thay vì tự map region string 
             var address = addressId.HasValue
                 ? await _context.Addresses.FirstOrDefaultAsync(a => a.Id == addressId.Value && a.UserId == user.Id)
                 : await _context.Addresses.FirstOrDefaultAsync(a => a.UserId == user.Id && a.IsDefault == true);
@@ -79,8 +75,6 @@ namespace Backend.Services
                 throw new BusinessException("Không tìm thấy địa chỉ giao hàng. Vui lòng chọn hoặc thêm địa chỉ.");
 
             var normalizedPaymentMethod = NormalizePaymentMethod(paymentMethod);
-
-            // >>> SỬA: dùng đúng IShippingFeeCalculator (chức năng 2) thay vì bảng giá tự chế 
             var shippingFee = _shippingFeeCalculator.Calculate(address);
 
             var subTotal = Math.Round(product.Price.Value * quantity, 2);
@@ -101,9 +95,6 @@ namespace Backend.Services
 
             var totalAmount = Math.Max(0, subTotal - discountAmount + shippingFee);
 
-            // >>> MỚI: gọi cổng thanh toán qua kiến trúc plug-in (IPaymentGatewayFactory).
-            // Với COD, bước "khởi tạo" đồng thời log lại transaction để truy vết.
-            // PayPal được khởi tạo ở PayPalController (sau khi có OrderId làm reference_id).
             if (normalizedPaymentMethod == "COD" && _paymentGatewayFactory != null)
             {
                 var codGateway = _paymentGatewayFactory.Resolve("COD");
@@ -114,17 +105,14 @@ namespace Backend.Services
                     $"COD order - user {user.Id} - product {productId}"));
             }
 
-            // PayPal is not considered paid until the server receives a successful
-            // capture response from PayPal. The PayPal checkout flow creates this
-            // local order as Pending and completes it in CompletePayPalPaymentAsync.
             var paymentStatus = "Pending";
             var orderStatus = "Pending";
             var estimatedArrival = DateTime.UtcNow.AddDays(GetEstimatedDeliveryDays(address));
-            
-            // Decoupled Shipping: Create initial order with pending tracking status immediately (< 2s)
-            // and push shipping creation task to the Background Worker Channel.
-            var initialTrackingNumber = $"PENDING-{user.Id}-{productId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
-            var initialShippingStatus = "Preparing";
+            var shipment = await _shippingService.CreateShipmentAsync(
+                address,
+                estimatedArrival,
+                $"{user.Id}-{productId}",
+                carrierKey);
 
             var order = await _orderRepository.CreateSimpleOrderAsync(
                 user.Id,
@@ -135,9 +123,9 @@ namespace Backend.Services
                 paymentStatus,
                 orderStatus,
                 address.Id,          // >>> SỬA: truyền addressId thay vì region string
-                "TBD",               // Carrier
-                initialShippingStatus, // Status
-                initialTrackingNumber, // TrackingNumber
+                shipment.Carrier,
+                shipment.Status,
+                shipment.TrackingNumber,
                 estimatedArrival,
                 quantity,
                 subTotal,
@@ -149,19 +137,6 @@ namespace Backend.Services
             if (appliedCouponId.HasValue)
             {
                 await _couponRepository.IncrementUsedCountAsync(appliedCouponId.Value);
-            }
-
-            // Push shipping task to bounded channel queue for asynchronous worker execution
-            if (_shippingTaskQueue != null)
-            {
-                var txId = $"TXN-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}[..8]";
-                await _shippingTaskQueue.QueueShippingTaskAsync(new DTOs.ShippingTaskMessage(
-                    order.Id,
-                    address.Id,
-                    user.Id,
-                    productId,
-                    txId,
-                    estimatedArrival));
             }
 
             return new QuickBuyCheckoutResponseDto
@@ -176,13 +151,135 @@ namespace Backend.Services
                 AddressId = address.Id,
                 ShippingDestination = $"{address.City ?? "N/A"}, {address.Country ?? "N/A"}",
 
-                TrackingNumber = initialTrackingNumber,
-                ShippingStatus = initialShippingStatus,
+                TrackingNumber = shipment.TrackingNumber,
+                ShippingStatus = shipment.Status,
                 EstimatedArrival = estimatedArrival,
 
                 Quantity = quantity,
                 SubTotal = subTotal,
                 DiscountAmount = discountAmount,
+                AppliedCoupon = appliedCouponCode
+            };
+        }
+
+        // >>> MỚI: checkout nhiều sản phẩm cùng lúc (giỏ hàng) — 1 Order, nhiều OrderItem
+        public async Task<CartCheckoutResponseDto?> CreateCartOrderAsync(
+            string buyerUsername,
+            List<OrderItemRequestDto> items,
+            string? paymentMethod,
+            int? addressId,
+            string? couponCode = null,
+            string? carrierKey = null)
+        {
+            if (items == null || items.Count == 0)
+                throw new BusinessException("Giỏ hàng đang trống.");
+
+            var user = await GetUserFromUsername(buyerUsername);
+            if (user == null) return null;
+
+            var address = addressId.HasValue
+                ? await _context.Addresses.FirstOrDefaultAsync(a => a.Id == addressId.Value && a.UserId == user.Id)
+                : await _context.Addresses.FirstOrDefaultAsync(a => a.UserId == user.Id && a.IsDefault == true);
+
+            if (address == null)
+                throw new BusinessException("Không tìm thấy địa chỉ giao hàng. Vui lòng chọn hoặc thêm địa chỉ.");
+
+            var normalizedPaymentMethod = NormalizePaymentMethod(paymentMethod);
+            var shippingFee = _shippingFeeCalculator.Calculate(address);
+
+            decimal subTotal = 0;
+            var orderInputs = new List<CartOrderItemInput>();
+            var responseItems = new List<CartCheckoutItemDto>();
+
+            foreach (var item in items)
+            {
+                if (item.Quantity <= 0)
+                    throw new BusinessException($"Số lượng sản phẩm {item.ProductId} không hợp lệ.");
+
+                var product = await _productRepository.GetProductByIdAsync(item.ProductId);
+                if (product == null || product.Price == null)
+                    throw new BusinessException($"Không tìm thấy sản phẩm id={item.ProductId} hoặc sản phẩm chưa có giá.");
+
+                var lineTotal = Math.Round(product.Price.Value * item.Quantity, 2);
+                subTotal += lineTotal;
+
+                orderInputs.Add(new CartOrderItemInput(item.ProductId, item.Quantity, product.Price.Value));
+                responseItems.Add(new CartCheckoutItemDto
+                {
+                    ProductId = item.ProductId,
+                    ProductTitle = product.Title ?? "(Không có tên)",
+                    Quantity = item.Quantity,
+                    UnitPrice = product.Price.Value
+                });
+            }
+
+            decimal discountAmount = 0;
+            string? appliedCouponCode = null;
+            int? appliedCouponId = null;
+
+            if (!string.IsNullOrWhiteSpace(couponCode))
+            {
+                var coupon = await _couponRepository.GetByCodeAsync(couponCode);
+                ValidateCartCoupon(coupon, items);
+
+                discountAmount = Math.Round(subTotal * (coupon!.DiscountPercent!.Value / 100m), 2);
+                appliedCouponCode = coupon.Code;
+                appliedCouponId = coupon.Id;
+
+                await _couponRepository.IncrementUsedCountAsync(coupon.Id);
+            }
+
+            var totalAmount = Math.Max(0, subTotal - discountAmount + shippingFee);
+
+            if (normalizedPaymentMethod == "COD" && _paymentGatewayFactory != null)
+            {
+                var codGateway = _paymentGatewayFactory.Resolve("COD");
+                await codGateway.InitiateAsync(new PaymentInitiationRequest(
+                    totalAmount,
+                    "VND",
+                    $"{user.Id}-cart-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                    $"COD cart order - user {user.Id} - {items.Count} sản phẩm"));
+            }
+
+            var paymentStatus = "Pending";
+            var orderStatus = "Pending";
+            var estimatedArrival = DateTime.UtcNow.AddDays(GetEstimatedDeliveryDays(address));
+            var shipment = await _shippingService.CreateShipmentAsync(
+                address,
+                estimatedArrival,
+                $"{user.Id}-cart-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                carrierKey);
+
+            var order = await _orderRepository.CreateMultiItemOrderAsync(
+                user.Id,
+                orderInputs,
+                shippingFee,
+                normalizedPaymentMethod,
+                paymentStatus,
+                orderStatus,
+                address.Id,
+                shipment.TrackingNumber,
+                estimatedArrival,
+                subTotal,
+                discountAmount,
+                totalAmount,
+                appliedCouponId);
+
+            return new CartCheckoutResponseDto
+            {
+                OrderId = order.Id,
+                Items = responseItems,
+                ShippingFee = shippingFee,
+                SubTotal = subTotal,
+                DiscountAmount = discountAmount,
+                TotalAmount = totalAmount,
+                PaymentMethod = normalizedPaymentMethod,
+                PaymentStatus = paymentStatus,
+                AddressId = address.Id,
+                ShippingDestination = $"{address.City ?? "N/A"}, {address.Country ?? "N/A"}",
+                TrackingNumber = shipment.TrackingNumber,
+                ShippingStatus = shipment.Status,
+                EstimatedArrival = estimatedArrival,
                 AppliedCoupon = appliedCouponCode
             };
         }
@@ -378,6 +475,25 @@ namespace Backend.Services
                 throw new BusinessException("Mã giảm giá không hợp lệ");
         }
 
+        // >>> MỚI: validate coupon cho giỏ hàng nhiều sản phẩm
+        private void ValidateCartCoupon(Coupon? coupon, List<OrderItemRequestDto> items)
+        {
+            if (coupon == null)
+                throw new BusinessException("Mã giảm giá không tồn tại");
+
+            var now = DateTime.UtcNow;
+            if (coupon.StartDate.HasValue && coupon.StartDate > now)
+                throw new BusinessException("Mã giảm giá chưa có hiệu lực");
+            if (coupon.EndDate.HasValue && coupon.EndDate < now)
+                throw new BusinessException("Mã giảm giá đã hết hạn");
+            if (coupon.MaxUsage.HasValue && (coupon.UsedCount ?? 0) >= coupon.MaxUsage.Value)
+                throw new BusinessException("Mã giảm giá đã hết lượt sử dụng");
+            if (coupon.DiscountPercent == null || coupon.DiscountPercent <= 0)
+                throw new BusinessException("Mã giảm giá không hợp lệ");
+            if (coupon.ProductId.HasValue && !items.Exists(i => i.ProductId == coupon.ProductId.Value))
+                throw new BusinessException("Mã giảm giá không áp dụng cho sản phẩm nào trong giỏ hàng");
+        }
+
         private static string NormalizePaymentMethod(string? paymentMethod)
         {
             return paymentMethod?.Trim().ToUpperInvariant() switch
@@ -387,12 +503,6 @@ namespace Backend.Services
                 _ => "COD"
             };
         }
-
-        // >>> SỬA: bỏ NormalizeShippingRegion + CalculateShippingFee(string) — không còn dùng,
-        // phí ship giờ lấy từ IShippingFeeCalculator (chức năng 2) 
-
-        // >>> SỬA: ước tính ngày giao hàng theo Address thay vì region string,
-        // dùng cùng tiêu chí phân loại nội thành/tỉnh khác/quốc tế như SimpleRegionShippingFeeCalculator 
 
         private static int GetEstimatedDeliveryDays(Address address)
         {
@@ -507,6 +617,9 @@ namespace Backend.Services
                 {
                     var order = group.Key;
                     var feedback = order.Feedbacks.FirstOrDefault();
+                    var shippingInfo = order.ShippingInfos
+                        .OrderByDescending(s => s.EstimatedArrival)
+                        .FirstOrDefault();
 
                     return new SellerSalesOrderDto
                     {
@@ -528,7 +641,16 @@ namespace Backend.Services
 
                         HasBuyerFeedback = feedback != null,
                         BuyerFeedbackId = feedback?.Id,
-                        BuyerFeedbackRating = feedback?.AverageRating
+                        BuyerFeedbackRating = feedback?.AverageRating,
+
+                        ShippingCarrier = shippingInfo?.Carrier,
+                        TrackingNumber = shippingInfo?.TrackingNumber,
+                        ShippingStatus = shippingInfo?.Status,
+                        EstimatedArrival = shippingInfo?.EstimatedArrival,
+                        ShippingFee = order.ShippingFee,
+
+                        ShippingCity = order.Address?.City,
+                        ShippingCountry = order.Address?.Country
                     };
                 });
 
@@ -545,8 +667,6 @@ namespace Backend.Services
                 .FirstOrDefault()?.TrackingNumber;
             if (string.IsNullOrWhiteSpace(trackingNumber)) return false;
 
-            // Update the simulated carrier first. Do not change our order if
-            // the carrier rejects the tracking number/status.
             var carrierUpdated = await _shippingService.UpdateShipmentStatusAsync(
                 trackingNumber,
                 newShippingStatus);

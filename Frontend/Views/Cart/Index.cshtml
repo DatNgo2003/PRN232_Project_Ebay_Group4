@@ -1,0 +1,62 @@
+﻿@model List<CartLineViewModel>
+@{
+    ViewData["Title"] = "Giỏ hàng";
+    var total = Model.Sum(i => i.LineTotal);
+}
+
+<div class="container my-4">
+    <h2 class="mb-4">Giỏ hàng của bạn</h2>
+
+    @if (TempData["CartMessage"] != null)
+    {
+        <div class="alert alert-info">@TempData["CartMessage"]</div>
+    }
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-secondary">
+            Giỏ hàng của bạn đang trống. <a href="/">Tiếp tục mua sắm</a>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-8">
+                @foreach (var item in Model)
+                {
+                    <div class="d-flex align-items-center border-bottom py-3">
+                        <img src="@item.Image" alt="@item.Title" style="width:90px;height:90px;object-fit:cover;" class="me-3 rounded" />
+                        <div class="flex-grow-1">
+                            <a href="/Product/Detail/@item.ProductId" class="fw-bold text-decoration-none">@item.Title</a>
+                            <div class="text-muted small">Sold by: @item.SellerName</div>
+                            <div class="text-muted small">Đơn giá: US $@item.UnitPrice.ToString("#,##0.00")</div>
+                        </div>
+                        <form asp-controller="Cart" asp-action="UpdateQuantity" method="post" class="d-flex align-items-center me-3">
+                            <input type="hidden" name="productId" value="@item.ProductId" />
+                            <input type="number" name="quantity" value="@item.Quantity" min="1" class="form-control form-control-sm" style="width:70px;" onchange="this.form.submit()" />
+                        </form>
+                        <div class="fw-bold me-3" style="width:100px;text-align:right;">
+                            US $@item.LineTotal.ToString("#,##0.00")
+                        </div>
+                        <form asp-controller="Cart" asp-action="Remove" method="post">
+                            <input type="hidden" name="productId" value="@item.ProductId" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
+                        </form>
+                    </div>
+                }
+            </div>
+
+            <div class="col-md-4">
+                <div class="border rounded p-3">
+                    <h5>Tóm tắt đơn hàng</h5>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Tạm tính (@Model.Sum(i => i.Quantity) sản phẩm)</span>
+                        <strong>US $@total.ToString("#,##0.00")</strong>
+                    </div>
+                    <p class="text-muted small">Phí vận chuyển và giảm giá sẽ được tính ở bước tiếp theo.</p>
+                    <a asp-controller="Checkout" asp-action="Index" class="btn btn-warning w-100 fw-bold">Proceed to Checkout</a>
+                </div>
+            </div>
+        </div>
+    }
+</div>

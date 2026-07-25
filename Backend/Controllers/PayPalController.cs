@@ -14,7 +14,7 @@ namespace Backend.Controllers;
 [ApiController]
 [Route("api/paypal")]
 [Authorize]
-[EnableRateLimiting("payment_shipping")] // >>> MỚI: giới hạn 20 request/phút/user cho toàn bộ controller
+[EnableRateLimiting("payment_shipping")]
 public sealed class PayPalController : ControllerBase
 {
     private readonly IOrderService _orderService;
@@ -58,7 +58,8 @@ public sealed class PayPalController : ControllerBase
                 "PayPal",
                 request.AddressId,
                 request.Quantity,
-                request.CouponCode);
+                request.CouponCode,
+                request.CarrierKey);
 
             if (checkout == null)
                 return BadRequest(new { message = "Unable to prepare the order." });
@@ -130,6 +131,84 @@ public sealed class PayPalController : ControllerBase
 
             _txLogger.LogInterModuleError(txId, "Payment.PayPal", "PayPal API", "CreateOrder", ex);
             _logger.LogError(ex, "Failed to create PayPal order for product {ProductId}", request.ProductId);
+            return StatusCode(502, new { message = "Không thể tạo thanh toán PayPal. Vui lòng thử lại." });
+        }
+    }
+
+    // >>> MỚI: tạo đơn PayPal cho NHIỀU sản phẩm (checkout từ giỏ hàng)
+    [HttpPost("create-cart-order")]
+    public async Task<IActionResult> CreateCartOrder(
+        [FromBody] PayPalCartCreateOrderRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (request?.Items == null || request.Items.Count == 0)
+            return BadRequest(new { message = "Giỏ hàng đang trống." });
+
+        var txId = _txLogger.StartTransaction("Payment.PayPal", "CreateCartOrder",
+            new { ItemCount = request.Items.Count });
+
+        try
+        {
+            var username = GetUsernameFromToken();
+            var checkout = await _orderService.CreateCartOrderAsync(
+                username,
+                request.Items,
+                "PayPal",
+                request.AddressId,
+                request.CouponCode,
+                request.CarrierKey);
+
+            if (checkout == null)
+                return BadRequest(new { message = "Unable to prepare the order." });
+
+            var gateway = _paymentGatewayFactory.Resolve("PayPal");
+            var initiation = await gateway.InitiateAsync(
+                new PaymentInitiationRequest(
+                    checkout.TotalAmount,
+                    _paypalOptions.Currency,
+                    checkout.OrderId.ToString(),
+                    $"Cart order #{checkout.OrderId}"),
+                cancellationToken);
+
+            if (!initiation.Success)
+            {
+                await _orderService.CancelOrderAsync(checkout.OrderId);
+                _txLogger.LogFailure(txId, "Payment.PayPal", "CreateCartOrder",
+                    new InvalidOperationException("PayPal initiation failed."), new { checkout.OrderId });
+                return StatusCode(502, new { message = "Không thể tạo thanh toán PayPal. Vui lòng thử lại." });
+            }
+
+            var attached = await _orderService.AttachPayPalOrderAsync(
+                username,
+                checkout.OrderId,
+                initiation.ProviderTransactionId);
+
+            if (!attached)
+            {
+                await _orderService.CancelOrderAsync(checkout.OrderId);
+                _txLogger.LogFailure(txId, "Payment.PayPal", "CreateCartOrder",
+                    new InvalidOperationException("Không thể gắn PayPal order vào đơn hàng nội bộ."),
+                    new { checkout.OrderId });
+                return BadRequest(new { message = "Unable to link the PayPal order." });
+            }
+
+            _txLogger.LogSuccess(txId, "Payment.PayPal", "CreateCartOrder",
+                new { checkout.OrderId, PayPalOrderId = initiation.ProviderTransactionId });
+
+            return Ok(new
+            {
+                id = initiation.ProviderTransactionId,
+                orderId = checkout.OrderId,
+                status = initiation.Status,
+                amount = checkout.TotalAmount,
+                currency = _paypalOptions.Currency,
+                transactionId = txId
+            });
+        }
+        catch (Exception ex)
+        {
+            _txLogger.LogInterModuleError(txId, "Payment.PayPal", "PayPal API", "CreateCartOrder", ex);
+            _logger.LogError(ex, "Failed to create PayPal cart order");
             return StatusCode(502, new { message = "Không thể tạo thanh toán PayPal. Vui lòng thử lại." });
         }
     }

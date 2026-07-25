@@ -121,37 +121,117 @@ namespace Backend.Repositories
             });
         }
 
+        // >>> MỚI: tạo 1 đơn hàng gồm NHIỀU sản phẩm (checkout từ giỏ hàng) —
+        // 1 Order, nhiều OrderItem, 1 Payment, 1 ShippingInfo dùng chung cho cả đơn.
+        public async Task<OrderTable> CreateMultiItemOrderAsync(
+            int buyerId,
+            List<CartOrderItemInput> items,
+            decimal shippingFee,
+            string paymentMethod,
+            string paymentStatus,
+            string orderStatus,
+            int addressId,
+            string trackingNumber,
+            DateTime estimatedArrival,
+            decimal subTotal,
+            decimal discountAmount,
+            decimal totalAmount,
+            int? couponId)
+        {
+            var newOrder = new OrderTable
+            {
+                BuyerId = buyerId,
+                AddressId = addressId,
+                OrderDate = DateTime.UtcNow,
+                TotalPrice = totalAmount,
+                Status = orderStatus,
+
+                SubTotal = subTotal,
+                ShippingFee = shippingFee,
+                DiscountAmount = discountAmount,
+                CouponId = couponId
+            };
+
+            _context.OrderTables.Add(newOrder);
+
+            foreach (var item in items)
+            {
+                _context.OrderItems.Add(new OrderItem
+                {
+                    Order = newOrder,
+                    ProductId = item.ProductId,
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice
+                });
+            }
+
+            var payment = new Payment
+            {
+                Order = newOrder,
+                UserId = buyerId,
+                Amount = totalAmount,
+                Method = paymentMethod,
+                Status = paymentStatus,
+                PaidAt = paymentStatus == "Paid" ? DateTime.UtcNow : null
+            };
+
+            _context.Payments.Add(payment);
+
+            var address = await _context.Addresses.FirstOrDefaultAsync(a => a.Id == addressId);
+            var carrierLabel = address != null
+                ? $"MockExpress - {address.City ?? address.Country ?? "N/A"}"
+                : "MockExpress";
+
+            var shippingInfo = new ShippingInfo
+            {
+                Order = newOrder,
+                Carrier = carrierLabel,
+                TrackingNumber = trackingNumber,
+                Status = "Preparing",
+                EstimatedArrival = estimatedArrival
+            };
+
+            _context.ShippingInfos.Add(shippingInfo);
+
+            await _context.SaveChangesAsync();
+            return newOrder;
+        }
+
         public async Task<IEnumerable<OrderItem>> GetPurchaseHistoryAsync(int buyerId)
         {
             return await _context.OrderItems
                 .Include(oi => oi.Product)
                     .ThenInclude(p => p.Seller)
                 .Include(oi => oi.Order)
+                    .ThenInclude(o => o.Payments)
+                .Include(oi => oi.Order)
+                    .ThenInclude(o => o.ShippingInfos)
+                .Include(oi => oi.Order)
                     .ThenInclude(o => o.Feedbacks)
                 .Include(oi => oi.Order)
                     .ThenInclude(o => o.Disputes)
                 .Include(oi => oi.Order)
                     .ThenInclude(o => o.ReturnRequests)
-                .Include(oi => oi.Order)
-                    .ThenInclude(o => o.Payments)
-                .Include(oi => oi.Order)
-                    .ThenInclude(o => o.ShippingInfos)
-                .Where(oi => oi.Order.BuyerId == buyerId
+                .Where(oi => oi.Order != null && oi.Order.BuyerId == buyerId
                     && oi.Order.Status != "Cancelled")
-                .OrderByDescending(oi => oi.Order.OrderDate)
+                .OrderByDescending(oi => oi.Order!.OrderDate)
                 .ToListAsync();
         }
 
         public async Task<IEnumerable<OrderItem>> GetOrderItemsBySellerIdAsync(int sellerId)
         {
             return await _context.OrderItems
+                .Include(oi => oi.Product)
                 .Include(oi => oi.Order)
                     .ThenInclude(o => o.Buyer)
                 .Include(oi => oi.Order)
                     .ThenInclude(o => o.Feedbacks)
-                .Include(oi => oi.Product)
+                .Include(oi => oi.Order)
+                    .ThenInclude(o => o.ShippingInfos)
+                .Include(oi => oi.Order)
+                    .ThenInclude(o => o.Address)
                 .Where(oi => oi.Product != null && oi.Product.SellerId == sellerId)
-                .OrderByDescending(oi => oi.Order.OrderDate)
+                .OrderByDescending(oi => oi.Order!.OrderDate)
                 .ToListAsync();
         }
 
@@ -160,7 +240,6 @@ namespace Backend.Repositories
             return await _context.OrderTables
                 .Include(o => o.Buyer)
                 .Include(o => o.ShippingInfos)
-                .Include(o => o.Payments)
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
@@ -174,9 +253,13 @@ namespace Backend.Repositories
 
             if (order == null) return;
 
-            foreach (var shipping in order.ShippingInfos)
+            var shippingInfo = order.ShippingInfos
+                .OrderByDescending(s => s.EstimatedArrival)
+                .FirstOrDefault();
+
+            if (shippingInfo != null)
             {
-                shipping.Status = newShippingStatus;
+                shippingInfo.Status = newShippingStatus;
             }
 
             if (newShippingStatus.Equals("Delivered", StringComparison.OrdinalIgnoreCase))
@@ -195,7 +278,6 @@ namespace Backend.Repositories
         {
             return await _context.OrderTables
                 .Include(o => o.Buyer)
-                .Include(o => o.Payments)
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
                 .Where(o =>

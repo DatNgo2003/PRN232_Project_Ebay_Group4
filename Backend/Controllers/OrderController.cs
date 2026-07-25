@@ -23,10 +23,6 @@ namespace Backend.Controllers
             _orderPricingService = orderPricingService;
         }
 
-        /// <summary>
-        /// Tính trước tổng tiền đơn hàng (SubTotal, DiscountAmount, ShippingFee, Total)
-        /// trước khi người dùng bấm mua thật. Không tạo đơn hàng, không lưu DB.
-        /// </summary>
         [HttpPost("calculate-total")]
         public async Task<IActionResult> CalculateTotal([FromBody] Backend.DTOs.Requests.CalculateOrderDto dto)
         {
@@ -51,7 +47,7 @@ namespace Backend.Controllers
         }
 
         [HttpPost("quick-buy")]
-        [EnableRateLimiting("payment_shipping")] // >>> MỚI: giới hạn 20 request/phút/user (tạo đơn + gọi payment gateway)
+        [EnableRateLimiting("payment_shipping")]
         public async Task<IActionResult> QuickBuy(
     [FromQuery] int productId,
     [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] QuickBuyCheckoutRequestDto? request)
@@ -71,7 +67,8 @@ namespace Backend.Controllers
                     request?.PaymentMethod,
                     request?.AddressId,
                     request?.Quantity ?? 1,
-                    request?.CouponCode);
+                    request?.CouponCode,
+                    request?.CarrierKey);
 
                 if (checkout == null)
                 {
@@ -79,6 +76,44 @@ namespace Backend.Controllers
                 }
 
                 return Ok(new { message = "Order created successfully.", checkout });
+            }
+            catch (BusinessException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        // >>> MỚI: checkout nhiều sản phẩm từ giỏ hàng (chỉ dùng cho COD; PayPal dùng /api/paypal/create-cart-order)
+        [HttpPost("cart-checkout")]
+        [EnableRateLimiting("payment_shipping")]
+        public async Task<IActionResult> CartCheckout([FromBody] CartCheckoutRequestDto request)
+        {
+            if (request?.Items == null || request.Items.Count == 0)
+            {
+                return BadRequest(new { message = "Giỏ hàng đang trống." });
+            }
+
+            try
+            {
+                var username = GetUsernameFromToken();
+                var checkout = await _orderService.CreateCartOrderAsync(
+                    username,
+                    request.Items,
+                    request.PaymentMethod,
+                    request.AddressId,
+                    request.CouponCode,
+                    request.CarrierKey);
+
+                if (checkout == null)
+                {
+                    return BadRequest(new { message = "Không thể tạo đơn hàng. Vui lòng thử lại." });
+                }
+
+                return Ok(new { message = "Đặt hàng thành công.", checkout });
             }
             catch (BusinessException ex)
             {
@@ -125,14 +160,9 @@ namespace Backend.Controllers
             }
         }
 
-        /// <summary>
-        /// Cập nhật trạng thái giao hàng của đơn hàng.
-        /// Khi status = "Delivered" hoặc "Failed", buyer sẽ nhận email thông báo tự động.
-        /// Chỉ seller và supporter được phép gọi API này.
-        /// </summary>
         [HttpPut("{orderId}/shipping-status")]
         [Authorize(Roles = "seller, supporter, admin")]
-        [EnableRateLimiting("payment_shipping")] // >>> MỚI: giới hạn 20 request/phút/user
+        [EnableRateLimiting("payment_shipping")]
         public async Task<IActionResult> UpdateShippingStatus(
             int orderId,
             [FromBody] UpdateShippingStatusRequestDto request)
@@ -142,7 +172,7 @@ namespace Backend.Controllers
                 return BadRequest(new { message = "Trường 'status' không được để trống." });
             }
 
-            var validStatuses = new[] { "Preparing", "Shipping", "Delivered", "Failed" };
+            var validStatuses = new[] { "Processing", "Shipped", "InTransit", "OutForDelivery", "Delivered", "Failed" };
             if (!validStatuses.Contains(request.Status, StringComparer.OrdinalIgnoreCase))
             {
                 return BadRequest(new

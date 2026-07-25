@@ -1,0 +1,62 @@
+﻿@model List<PurchaseHistoryItemDto>
+@{
+    ViewData["Title"] = "Order Confirmation";
+    var first = Model.First();
+}
+
+<div class="container my-5">
+    <div class="text-center mb-4">
+        <div style="font-size:48px;">✅</div>
+        <h2>Cảm ơn bạn đã đặt hàng!</h2>
+        <p class="text-muted">Mã đơn hàng: <strong>#@first.OrderId</strong></p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="border rounded p-3 mb-3">
+                <h5>Chi tiết đơn hàng</h5>
+                @foreach (var item in Model)
+                {
+                    <div class="d-flex align-items-center py-2 border-bottom">
+                        <img src="@item.ProductImage" alt="@item.ProductTitle" style="width:60px;height:60px;object-fit:cover;" class="me-3 rounded" />
+                        <div class="flex-grow-1">
+                            <div class="fw-bold">@item.ProductTitle</div>
+                            <div class="text-muted small">Sold by: @item.SellerUsername</div>
+                        </div>
+                        <div>US $@item.UnitPrice?.ToString("#,##0.00")</div>
+                    </div>
+                }
+                <div class="d-flex justify-content-between fs-5 mt-3">
+                    <span>Total</span>
+                    <strong>US $@first.OrderTotalPrice?.ToString("#,##0.00")</strong>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="border rounded p-3 mb-3">
+                        <h6>Thanh toán</h6>
+                        <div>Phương thức: <strong>@first.PaymentMethod</strong></div>
+                        <div>Trạng thái: <span class="badge bg-@(first.PaymentStatus == "Paid" ? "success" : "warning")">@first.PaymentStatus</span></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="border rounded p-3 mb-3">
+                        <h6>Vận chuyển</h6>
+                        <div>Mã vận đơn: <strong>@first.TrackingNumber</strong></div>
+                        <div>Trạng thái: <span class="badge bg-info">@first.ShippingStatus</span></div>
+                        @if (first.EstimatedArrival.HasValue)
+                        {
+                            <div>Dự kiến đến: @first.EstimatedArrival.Value.ToString("dd/MM/yyyy")</div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-3">
+                <a asp-controller="Purchase" asp-action="Index" class="btn btn-outline-primary">Xem lịch sử mua hàng</a>
+                <a href="/" class="btn btn-warning">Tiếp tục mua sắm</a>
+            </div>
+        </div>
+    </div>
+</div>
