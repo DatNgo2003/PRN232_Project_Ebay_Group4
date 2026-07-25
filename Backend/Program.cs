@@ -121,6 +121,13 @@ builder.Services.AddHostedService<DisputeEscalationService>();
 // Background service tự động huỷ đơn hàng quá hạn thanh toán
 builder.Services.AddHostedService<Backend.Backgrounds.OrderCancellationService>();
 
+// Add SignalR services
+builder.Services.AddSignalR();
+
+// === Bounded Channel Queue & Decoupled Shipping BackgroundWorker ===
+builder.Services.AddSingleton<IShippingTaskQueue, Backend.Services.Implementation.ShippingTaskQueue>();
+builder.Services.AddHostedService<Backend.Backgrounds.ShippingBackgroundWorker>();
+
 var logPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "logs", "log.json");
 
 Log.Logger = new LoggerConfiguration()
@@ -168,6 +175,7 @@ app.MapControllers()
    .RequireRateLimiting("fixed_by_ip"); app.UseRateLimiter();
 // Map SignalR hub and require the same CORS policy for hub endpoints
 app.MapHub<Backend.Hubs.ChatHub>("/hubs/chat").RequireCors("AllowSpecificOrigins");
+app.MapHub<Backend.Hubs.OrderNotificationHub>("/hubs/order-notifications").RequireCors("AllowSpecificOrigins");
 
 // Development helper: optionally remove Message table FK constraints so messages can be saved
 // using only senderId/receiverId integers (useful for demo environments where users may not exist).

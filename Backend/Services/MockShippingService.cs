@@ -31,17 +31,8 @@ public sealed class MockShippingService : IShippingService
         string? carrierKey = null,
         CancellationToken cancellationToken = default)
     {
-        throw new HttpRequestException("Lỗi mạng giả lập: Không thể kết nối tới server vận chuyển!");
         ArgumentNullException.ThrowIfNull(destination);
         cancellationToken.ThrowIfCancellationRequested();
-
-        // --- TEMPORARY FAILURE CODE FOR TESTING POLLY ---
-        if (_httpClient != null)
-        {
-            // This will fail (Connection Refused) and trigger Polly's exponential backoff
-            await _httpClient.GetAsync("http://localhost:9999/trigger-failure", cancellationToken);
-        }
-        // ------------------------------------------------
 
         // MOCK- is intentional: it makes test/demo shipments distinguishable
         // from production carrier numbers while remaining safe for DB's 100-char column.
@@ -51,15 +42,10 @@ public sealed class MockShippingService : IShippingService
         var trackingNumber = $"MOCK-{safeReference}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}";
         _statuses[trackingNumber] = "Processing";
 
-<<<<<<< HEAD
-        var carrier = $"MockExpress - {destination.City ?? destination.Country ?? "N/A"}";
-        return new ShippingShipment(carrier, trackingNumber, "Preparing", estimatedArrival);
-=======
         var carrier = string.IsNullOrWhiteSpace(carrierKey)
             ? $"MockExpress - {destination.City ?? destination.Country ?? "N/A"}"
             : carrierKey;
-        return Task.FromResult(new ShippingShipment(carrier, trackingNumber, "Processing", estimatedArrival));
->>>>>>> 61ded49ec859a8a4c0c80afa6328b0b3f068e920
+        return new ShippingShipment(carrier, trackingNumber, "Preparing", estimatedArrival);
     }
 
     public Task<bool> UpdateShipmentStatusAsync(
