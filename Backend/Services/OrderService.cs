@@ -120,7 +120,7 @@ namespace Backend.Services
             var paymentStatus = "Pending";
             var orderStatus = "Pending";
             var estimatedArrival = DateTime.UtcNow.AddDays(GetEstimatedDeliveryDays(address));
-
+            
             // Decoupled Shipping: Create initial order with pending tracking status immediately (< 2s)
             // and push shipping creation task to the Background Worker Channel.
             var initialTrackingNumber = $"PENDING-{user.Id}-{productId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
@@ -134,15 +134,10 @@ namespace Backend.Services
                 normalizedPaymentMethod,
                 paymentStatus,
                 orderStatus,
-
-                address.Id,          // >>> SỬA: truyền addressId thay vì region string 
-                initialTrackingNumber,
-
                 address.Id,          // >>> SỬA: truyền addressId thay vì region string
-                shipment.Carrier,
-                shipment.Status,
-                shipment.TrackingNumber,
-
+                "TBD",               // Carrier
+                initialShippingStatus, // Status
+                initialTrackingNumber, // TrackingNumber
                 estimatedArrival,
                 quantity,
                 subTotal,
